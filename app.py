@@ -235,7 +235,7 @@ if __name__ == "__main__":
                 rolling_mean = time_series.rolling(window=12).mean()
                 rolling_std = time_series.rolling(window=12).std()
                 anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
-                fig.add__trace(go.Scatter(x=time_series.index, y=time_series, mode='lines', name=f'{county_name}'))
+                fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode='lines', name=f'{county_name}'))
                 fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode='markers', name=f'{county_name} Anomaly', marker=dict(symbol='x')))
 
     if len(fips_code_inputs) > 1:
