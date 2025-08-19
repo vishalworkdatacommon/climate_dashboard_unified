@@ -8,4 +8,3 @@ statsmodels
 pyarrow
 plotly
 pmdarima==2.0.4
-
