@@ -24,78 +24,78 @@ st.set_page_config(
 warnings.filterwarnings("ignore")
 
 # --- Live Data Pipeline ---
-# @st.cache_data(ttl="1d")
-# def get_live_data():
-#     """
-#     Downloads, parses, and combines live climate data from data.cdc.gov.
-#     The result is cached for 24 hours. Returns the data and the update time.
-#     """
-#     with st.spinner("Fetching and processing live data from data.cdc.gov. This may take several minutes..."):
-#         urls = {
-#             "SPEI": "https://data.cdc.gov/resource/6nbv-ifib.csv",
-#             "SPI": "https://data.cdc.gov/resource/xbk2-5i4e.csv",
-#             "PDSI": "https://data.cdc.gov/resource/en5r-5ds4.csv"
-#         }
-#         all_data = []
-#         for index_type, url in urls.items():
-#             try:
-#                 full_url = f"{url}?$limit=10000000"
-#                 df = pd.read_csv(full_url)
+@st.cache_data(ttl="1d")
+def get_live_data():
+    """
+    Downloads, parses, and combines live climate data from data.cdc.gov.
+    The result is cached for 24 hours. Returns the data and the update time.
+    """
+    with st.spinner("Fetching and processing live data from data.cdc.gov. This may take several minutes..."):
+        urls = {
+            "SPEI": "https://data.cdc.gov/resource/6nbv-ifib.csv",
+            "SPI": "https://data.cdc.gov/resource/xbk2-5i4e.csv",
+            "PDSI": "https://data.cdc.gov/resource/en5r-5ds4.csv"
+        }
+        all_data = []
+        for index_type, url in urls.items():
+            try:
+                full_url = f"{url}?$limit=10000000"
+                df = pd.read_csv(full_url)
 
-#                 # --- Standardize the dataframe ---
-#                 df["month"] = df["month"].map("{:02}".format)
-#                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
-#                 if "fips" in df.columns:
-#                     df.rename(columns={'fips': 'countyfips'}, inplace=True)
-#                 df['countyfips'] = df['countyfips'].astype(str).str.zfill(5)
-#                 if index_type == 'SPEI':
-#                     df.rename(columns={'spei': 'Value'}, inplace=True)
-#                 elif index_type == 'SPI':
-#                     df.rename(columns={'spi': 'Value'}, inplace=True)
-#                 elif index_type == 'PDSI':
-#                     df.rename(columns={'pdsi': 'Value'}, inplace=True)
+                # --- Standardize the dataframe ---
+                df["month"] = df["month"].map("{:02}".format)
+                df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+                if "fips" in df.columns:
+                    df.rename(columns={'fips': 'countyfips'}, inplace=True)
+                df['countyfips'] = df['countyfips'].astype(str).str.zfill(5)
+                if index_type == 'SPEI':
+                    df.rename(columns={'spei': 'Value'}, inplace=True)
+                elif index_type == 'SPI':
+                    df.rename(columns={'spi': 'Value'}, inplace=True)
+                elif index_type == 'PDSI':
+                    df.rename(columns={'pdsi': 'Value'}, inplace=True)
 
-#                 df['index_type'] = index_type
+                df['index_type'] = index_type
                 
-#                 # Keep only the necessary columns
-#                 cols_to_keep = ['date', 'countyfips', 'Value', 'index_type']
-#                 if all(col in df.columns for col in cols_to_keep):
-#                     all_data.append(df[cols_to_keep])
-#                 else:
-#                     st.warning(f"Could not process {index_type} due to missing columns.")
+                # Keep only the necessary columns
+                cols_to_keep = ['date', 'countyfips', 'Value', 'index_type']
+                if all(col in df.columns for col in cols_to_keep):
+                    all_data.append(df[cols_to_keep])
+                else:
+                    st.warning(f"Could not process {index_type} due to missing columns.")
 
-#             except Exception as e:
-#                 st.error(f"Failed to load or process data for {index_type}. Error: {e}")
-#                 continue
+            except Exception as e:
+                st.error(f"Failed to load or process data for {index_type}. Error: {e}")
+                continue
 
-#         if not all_data:
-#             st.error("Could not load any climate data. The application cannot proceed.")
-#             return pd.DataFrame(), pd.Series(), None
+        if not all_data:
+            st.error("Could not load any climate data. The application cannot proceed.")
+            return pd.DataFrame(), pd.Series(), None
 
-#         # --- Combine and Merge Data ---
-#         combined_df = pd.concat(all_data, ignore_index=True)
-#         combined_df['date'] = pd.to_datetime(combined_df['date'])
+        # --- Combine and Merge Data ---
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df['date'] = pd.to_datetime(combined_df['date'])
 
-#         # --- Load FIPS Data ---
-#         fips_file_path = os.path.join(os.path.dirname(__file__), 'fips_to_county.csv')
-#         if not os.path.exists(fips_file_path):
-#             st.error(f"Fatal Error: The FIPS data file was not found.")
-#             return pd.DataFrame(), pd.Series(), None
+        # --- Load FIPS Data ---
+        fips_file_path = os.path.join(os.path.dirname(__file__), 'fips_to_county.csv')
+        if not os.path.exists(fips_file_path):
+            st.error(f"Fatal Error: The FIPS data file was not found.")
+            return pd.DataFrame(), pd.Series(), None
         
-#         fips_df = pd.read_csv(fips_file_path)
-#         fips_df['state_fips'] = fips_df['state_fips'].astype(str).str.zfill(2)
-#         fips_df['county_fips'] = fips_df['county_fips'].astype(str).str.zfill(3)
-#         fips_df['countyfips'] = fips_df['state_fips'] + fips_df['county_fips']
-#         fips_df.rename(columns={'county': 'county_name'}, inplace=True)
+        fips_df = pd.read_csv(fips_file_path)
+        fips_df['state_fips'] = fips_df['state_fips'].astype(str).str.zfill(2)
+        fips_df['county_fips'] = fips_df['county_fips'].astype(str).str.zfill(3)
+        fips_df['countyfips'] = fips_df['state_fips'] + fips_df['county_fips']
+        fips_df.rename(columns={'county': 'county_name'}, inplace=True)
 
-#         # Merge
-#         df = pd.merge(combined_df, fips_df[['countyfips', 'county_name', 'state']], on='countyfips', how='left')
-#         df.dropna(subset=['county_name', 'state'], inplace=True)
-#         df['display_name'] = df['county_name'] + ", " + df['state']
+        # Merge
+        df = pd.merge(combined_df, fips_df[['countyfips', 'county_name', 'state']], on='countyfips', how='left')
+        df.dropna(subset=['county_name', 'state'], inplace=True)
+        df['display_name'] = df['county_name'] + ", " + df['state']
         
-#         fips_options = df[['countyfips', 'display_name']].drop_duplicates().sort_values('display_name').set_index('countyfips')
+        fips_options = df[['countyfips', 'display_name']].drop_duplicates().sort_values('display_name').set_index('countyfips')
         
-#         return df, fips_options, datetime.now()
+        return df, fips_options, datetime.now()
 
 # --- Analysis Functions ---
 def plot_trend_analysis(ts, index_type):
@@ -105,44 +105,6 @@ def plot_trend_analysis(ts, index_type):
     fig.add_trace(go.Scatter(x=rolling_avg.index, y=rolling_avg, mode='lines', name='12-Month Rolling Average', line=dict(color='navy', width=2.5)))
     fig.update_layout(title=f'{index_type} Trend Analysis', xaxis_title='Year', yaxis_title=f'{index_type} Value', legend=dict(x=0.01, y=0.99, bordercolor="Black", borderwidth=1), template='plotly_white', font=dict(size=14), height=600)
     return fig
-
-@st.cache_data
-def load_prebuilt_data():
-    """
-    Loads the pre-built climate data from the Parquet file.
-    """
-    parquet_path = os.path.join(os.path.dirname(__file__), 'climate_indices.parquet')
-    if not os.path.exists(parquet_path):
-        st.error("Fatal Error: The pre-built data file (climate_indices.parquet) was not found.")
-        st.info("Please run the `build_data.py` script first to generate the necessary data file.")
-        return pd.DataFrame(), pd.Series(), None
-
-    combined_df = pd.read_parquet(parquet_path)
-    
-    # --- Load FIPS Data ---
-    fips_file_path = os.path.join(os.path.dirname(__file__), 'fips_to_county.csv')
-    if not os.path.exists(fips_file_path):
-        st.error(f"Fatal Error: The FIPS data file was not found.")
-        return pd.DataFrame(), pd.Series(), None
-    
-    fips_df = pd.read_csv(fips_file_path)
-    fips_df['state_fips'] = fips_df['state_fips'].astype(str).str.zfill(2)
-    fips_df['county_fips'] = fips_df['county_fips'].astype(str).str.zfill(3)
-    fips_df['countyfips'] = fips_df['state_fips'] + fips_df['county_fips']
-    fips_df.rename(columns={'county': 'county_name'}, inplace=True)
-
-    # Merge
-    df = pd.merge(combined_df, fips_df[['countyfips', 'county_name', 'state']], on='countyfips', how='left')
-    df.dropna(subset=['county_name', 'state'], inplace=True)
-    df['display_name'] = df['county_name'] + ", " + df['state']
-    
-    fips_options = df[['countyfips', 'display_name']].drop_duplicates().sort_values('display_name').set_index('countyfips')
-    
-    # Get the last modified time of the parquet file
-    last_updated_timestamp = os.path.getmtime(parquet_path)
-    last_updated = datetime.fromtimestamp(last_updated_timestamp)
-    
-    return df, fips_options, last_updated
 
 def plot_anomaly_detection(ts, index_type):
     rolling_mean = ts.rolling(window=12).mean()
@@ -202,7 +164,7 @@ if __name__ == "__main__":
     st.title("💧 U.S. County-Level Drought Analysis")
     st.markdown("Explore and compare key drought indices for any county in the United States. This dashboard uses pre-built data, updated periodically.")
 
-    full_data, fips_options, last_updated = load_prebuilt_data()
+    full_data, fips_options, last_updated = get_live_data()
 
     with st.sidebar:
         st.header("Dashboard Controls")
