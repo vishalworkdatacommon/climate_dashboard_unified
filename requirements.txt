@@ -8,3 +8,7 @@ statsmodels
 pyarrow
 plotly
 pmdarima==2.0.4
+prophet
+folium
+geopandas
+streamlit-foliumstreamlit-folium
