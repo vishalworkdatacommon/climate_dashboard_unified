@@ -28,6 +28,8 @@ st.set_page_config(
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
+st.cache_data.clear()
+st.cache_resource.clear()
 
 
 def main() -> None:
