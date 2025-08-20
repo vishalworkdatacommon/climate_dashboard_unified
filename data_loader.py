@@ -5,7 +5,7 @@ import os
 from datetime import datetime
 import traceback
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
-from schemas import ClimateDataSchema, FipsDataSchema
+from schemas import climate_data_schema, fips_data_schema
 
 from typing import Tuple, Optional
 
@@ -77,7 +77,7 @@ def get_live_data() -> Tuple[
 
         # --- Validate Data ---
         try:
-            fips_df = FipsDataSchema.validate(fips_df)
+            fips_df = fips_data_schema.validate(fips_df)
         except Exception as e:
             st.error("FIPS data validation failed.")
             st.code(str(e))
@@ -94,7 +94,7 @@ def get_live_data() -> Tuple[
         df["display_name"] = df["county_name"] + ", " + df["state"]
 
         try:
-            df = ClimateDataSchema.validate(df)
+            df = climate_data_schema.validate(df)
         except Exception as e:
             st.error("Climate data validation failed after merge.")
             st.code(str(e))
