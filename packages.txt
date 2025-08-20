@@ -3,3 +3,4 @@ pkg-config
 libopenblas-dev
 liblapack-dev
 gfortran
+libgdal-dev
