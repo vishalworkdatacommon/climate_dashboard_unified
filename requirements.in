@@ -10,4 +10,4 @@ folium
 geopandas
 streamlit-folium
 scikit-learn
-pandera
+pandera>=0.15.0
