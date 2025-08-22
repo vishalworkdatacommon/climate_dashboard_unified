@@ -10,7 +10,9 @@ from typing import Tuple, Dict
 
 
 @st.cache_resource
-def plot_forecasting_arima(ts: pd.Series, index_type: str) -> go.Figure:
+def plot_forecasting_arima(
+    ts: pd.Series, index_type: str, n_periods: int = 24
+) -> go.Figure:
     with st.spinner("Finding best ARIMA forecast model... This may take a moment."):
         model = pm.auto_arima(
             ts.dropna(),
@@ -29,7 +31,7 @@ def plot_forecasting_arima(ts: pd.Series, index_type: str) -> go.Figure:
             suppress_warnings=True,
             stepwise=True,
         )
-    n_periods = 24
+    # n_periods = 24
     forecast, conf_int = model.predict(n_periods=n_periods, return_conf_int=True)
     forecast_index = pd.date_range(
         start=ts.index[-1], periods=n_periods + 1, freq="MS"
@@ -82,13 +84,15 @@ def plot_forecasting_arima(ts: pd.Series, index_type: str) -> go.Figure:
 
 
 @st.cache_resource
-def plot_forecasting_prophet(ts: pd.Series, index_type: str) -> go.Figure:
+def plot_forecasting_prophet(
+    ts: pd.Series, index_type: str, n_periods: int = 24
+) -> go.Figure:
     with st.spinner("Fitting Prophet model... This may take a moment."):
         df = ts.reset_index()
         df.rename(columns={"date": "ds", "Value": "y"}, inplace=True)
         model = Prophet(yearly_seasonality=True)
         model.fit(df)
-    future = model.make_future_dataframe(periods=24, freq="MS")
+    future = model.make_future_dataframe(periods=n_periods, freq="MS")
     forecast = model.predict(future)
 
     # Separate future forecast data for plotting
@@ -151,7 +155,7 @@ def plot_forecasting_prophet(ts: pd.Series, index_type: str) -> go.Figure:
 
 @st.cache_resource
 def plot_forecasting_both(
-    ts: pd.Series, index_type: str
+    ts: pd.Series, index_type: str, n_periods: int = 24
 ) -> Tuple[go.Figure, Dict[str, float]]:
     with st.spinner(
         "Running ARIMA & Prophet, calculating performance metrics... This may take a moment."
@@ -216,7 +220,7 @@ def plot_forecasting_both(
             suppress_warnings=True,
             stepwise=True,
         )
-        n_periods = 24
+        # n_periods = 24
         arima_forecast, arima_conf_int = arima_model_final.predict(
             n_periods=n_periods, return_conf_int=True
         )
@@ -229,7 +233,9 @@ def plot_forecasting_both(
         df_full.rename(columns={"date": "ds", "Value": "y"}, inplace=True)
         prophet_model_final = Prophet(yearly_seasonality=True)
         prophet_model_final.fit(df_full)
-        future_final = prophet_model_final.make_future_dataframe(periods=24, freq="MS")
+        future_final = prophet_model_final.make_future_dataframe(
+            periods=n_periods, freq="MS"
+        )
         prophet_forecast = prophet_model_final.predict(future_final)
         prophet_forecast_future = prophet_forecast[
             prophet_forecast["ds"] > ts.index.max()

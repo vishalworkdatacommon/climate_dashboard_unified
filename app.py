@@ -28,8 +28,6 @@ st.set_page_config(
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
-st.cache_data.clear()
-st.cache_resource.clear()
 
 
 def main() -> None:
@@ -37,6 +35,15 @@ def main() -> None:
     st.markdown(
         "Explore and compare key drought indices for any county in the United States. This dashboard uses pre-built data, updated periodically."
     )
+
+    with st.expander("About the Climate Indices"):
+        st.markdown(
+            """
+            - **PDSI (Palmer Drought Severity Index):** Measures long-term drought based on temperature and precipitation data.
+            - **SPI (Standardized Precipitation Index):** Shows how precipitation compares to the long-term average for a given period.
+            - **SPEI (Standardized Precipitation-Evapotranspiration Index):** Similar to SPI, but also includes the effect of temperature on water demand.
+            """
+        )
 
     full_data, fips_options, gdf, last_updated = get_live_data()
 
@@ -80,11 +87,20 @@ def main() -> None:
             )
 
             model_choice = "ARIMA"
+            forecast_horizon = 24
             if analysis_choice == "Forecasting":
                 model_choice = st.selectbox(
                     "4. Select Forecasting Model:",
                     ["ARIMA", "Prophet", "Both"],
                     key="model_selectbox",
+                )
+                forecast_horizon = st.slider(
+                    "5. Select Forecast Horizon (Months):",
+                    min_value=6,
+                    max_value=48,
+                    value=24,
+                    step=6,
+                    key="horizon_slider",
                 )
 
             if fips_code_inputs:
@@ -143,13 +159,17 @@ def main() -> None:
             if len(fips_code_inputs) == 1:
                 if analysis_choice == "Forecasting":
                     if model_choice == "Prophet":
-                        fig = plot_forecasting_prophet(time_series, index_choice)
+                        fig = plot_forecasting_prophet(
+                            time_series, index_choice, forecast_horizon
+                        )
                     elif model_choice == "ARIMA":
-                        fig = plot_forecasting_arima(time_series, index_choice)
-                    elif model_choice == "ARIMA":
-                        fig = plot_forecasting_arima(time_series, index_choice)
+                        fig = plot_forecasting_arima(
+                            time_series, index_choice, forecast_horizon
+                        )
                     else:  # Both
-                        fig, metrics = plot_forecasting_both(time_series, index_choice)
+                        fig, metrics = plot_forecasting_both(
+                            time_series, index_choice, forecast_horizon
+                        )
                 else:
                     plot_function_mapping = {
                         "Trend Analysis": plot_trend_analysis,
