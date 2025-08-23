@@ -12,6 +12,7 @@ from plotting import (
     plot_seasonal_decomposition,
     plot_autocorrelation,
     plot_comparison_mode,
+    display_historical_insights,
 )
 from ml_models import (
     plot_forecasting_arima,
@@ -198,6 +199,11 @@ def main() -> None:
 
         if fig.data:
             st.plotly_chart(fig, use_container_width=True)
+            
+            # Display historical insights for single-county, non-forecasting views
+            if len(fips_code_inputs) == 1 and analysis_choice != "Forecasting":
+                display_historical_insights(time_series)
+
             if "metrics" in locals() and analysis_choice == "Forecasting" and model_choice == "Both":
                 st.subheader("Model Performance on Historical Data (Last 12 Months)")
                 col1, col2 = st.columns(2)

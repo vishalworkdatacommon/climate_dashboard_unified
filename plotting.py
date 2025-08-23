@@ -5,6 +5,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf, pacf
+from scipy.stats import percentileofscore
 
 
 def plot_trend_analysis(ts: pd.Series, index_type: str) -> go.Figure:
@@ -250,7 +251,19 @@ def plot_comparison_mode(full_data: pd.DataFrame, fips_codes: list, index_choice
     summary_stats.rename(columns={'50%': 'median'}, inplace=True)
     summary_stats = summary_stats.round(2)
 
-    st.dataframe(summary_stats, use_container_width=True)
+    # Add sparkline data
+    summary_stats['Trend'] = [pivot_df[col].dropna().tolist() for col in pivot_df.columns]
+
+    st.dataframe(
+        summary_stats,
+        use_container_width=True,
+        column_config={
+            "Trend": st.column_config.LineChartColumn(
+                "Historical Trend",
+                width="medium",
+            ),
+        }
+    )
 
     # 3. Calculate and display Correlation Matrix
     st.subheader("Correlation Matrix")
@@ -274,3 +287,54 @@ def plot_comparison_mode(full_data: pd.DataFrame, fips_codes: list, index_choice
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.warning("At least two counties must be selected to display a correlation matrix.")
+
+
+def display_historical_insights(ts: pd.Series):
+    """
+    Calculates and displays key historical insights for a given time series.
+    """
+    st.subheader("Historical Insights")
+    
+    if ts.empty:
+        st.warning("Not enough data to generate historical insights.")
+        return
+
+    latest_value = ts.iloc[-1]
+    latest_date = ts.index[-1]
+    
+    # 1. Percentile Rank
+    percentile = percentileofscore(ts.dropna(), latest_value)
+    
+    # 2. Comparison to Monthly Average
+    monthly_avg = ts[ts.index.month == latest_date.month].mean()
+    diff_from_avg = latest_value - monthly_avg
+    
+    # 3. Longest Drought Period
+    drought_threshold = -1.0
+    drought_periods = (ts < drought_threshold).astype(int).groupby(ts.ge(drought_threshold).astype(int).cumsum()).cumsum()
+    longest_drought = drought_periods.max()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            label=f"Latest Value ({latest_date.strftime('%b %Y')})",
+            value=f"{latest_value:.2f}"
+        )
+    with col2:
+        st.metric(
+            label="Historical Percentile",
+            value=f"{percentile:.1f}%",
+            help="The percentage of historical values that are less than or equal to the latest value."
+        )
+    with col3:
+        st.metric(
+            label=f"vs. Avg for {latest_date.strftime('%B')}",
+            value=f"{diff_from_avg:+.2f}",
+            help=f"The difference between the latest value and the historical average for all {latest_date.strftime('%B')}s."
+        )
+    
+    st.metric(
+        label="Longest Drought Period",
+        value=f"{longest_drought} months",
+        help=f"The longest consecutive period with an index value below {drought_threshold}."
+    )
