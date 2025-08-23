@@ -21,19 +21,23 @@ from ml_models import (
 )
 from map_view import create_interactive_map
 
+# --- Session State Initialization ---
+if 'selected_fips' not in st.session_state:
+    st.session_state.selected_fips = []
+if 'theme' not in st.session_state:
+    st.session_state.theme = "Light"
+
 # --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
     page_icon=None,
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
 
-# --- Session State Initialization ---
-if 'selected_fips' not in st.session_state:
-    st.session_state.selected_fips = []
 
 def main() -> None:
     st.title("U.S. County-Level Drought Analysis")
@@ -69,6 +73,16 @@ def main() -> None:
         )
         st.session_state.selected_fips = fips_code_inputs
 
+        st.divider()
+        
+        theme = st.selectbox(
+            "Select Theme:",
+            ["Light", "Dark", "Contrast"],
+            key="theme_selectbox",
+        )
+        st.session_state.theme = theme
+        
+        # Analysis selection is now in the main panel for single-county view
         analysis_choice = None
         if len(fips_code_inputs) > 1:
             analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
