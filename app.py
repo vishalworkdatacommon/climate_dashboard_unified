@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
 import streamlit as st
 import warnings
 import plotly.graph_objects as go
 from datetime import datetime
+import os
+import subprocess
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_prebuilt_data_for_map
@@ -20,6 +21,26 @@ from ml_models import (
     plot_forecasting_both,
 )
 from map_view import create_interactive_map
+
+# --- Initial Setup: Check for pre-built data ---
+PARQUET_PATH = "climate_indices.parquet"
+if not os.path.exists(PARQUET_PATH):
+    st.warning(f"Map data file not found. Automatically running build script... (This may take a few minutes)")
+    try:
+        # Use subprocess to run the build script
+        process = subprocess.run(
+            ["python3", "build_data.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        st.success("Map data file built successfully!")
+        st.rerun()
+    except subprocess.CalledProcessError as e:
+        st.error("Failed to build the map data file. The application may not function correctly.")
+        st.code(e.stderr)
+        st.stop()
+
 
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
