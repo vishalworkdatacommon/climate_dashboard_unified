@@ -57,22 +57,23 @@ from ml_models import (
 )
 from map_view import create_interactive_map
 
-# --- Initial Setup: Check for pre-built data ---
+# --- Initial Setup: Smartly handle pre-built data ---
 PARQUET_PATH = "climate_indices.parquet"
 if not os.path.exists(PARQUET_PATH):
-    st.warning(f"Map data file not found. Automatically running build script... (This may take a few minutes)")
-    try:
-        process = subprocess.run(["python3", "build_data.py"], capture_output=True, text=True, check=True)
-        st.success("Map data file built successfully!")
-        st.rerun()
-    except subprocess.CalledProcessError as e:
-        st.error("Failed to build the map data file. The application may not function correctly.")
-        st.code(e.stderr)
-        st.stop()
+    # Check if the build process is already running
+    if 'build_process_running' not in st.session_state:
+        st.session_state.build_process_running = True
+        try:
+            # Run the build script in the background
+            subprocess.Popen(["python3", "build_data.py"])
+        except Exception as e:
+            st.error(f"Failed to start the data build process: {e}")
+            st.session_state.build_process_running = False
 
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = []
+
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
@@ -128,8 +129,13 @@ def main() -> None:
             analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
     # --- Interactive Map ---
-    show_map = st.checkbox("Show Interactive Map Selector")
-    if show_map and gdf is not None:
+    map_data_exists = os.path.exists(PARQUET_PATH)
+    show_map = st.checkbox("Show Interactive Map Selector", value=True, disabled=not map_data_exists)
+    
+    if not map_data_exists:
+        st.info("The interactive map is currently being prepared and will be available shortly. Please refresh in a few minutes.")
+
+    if show_map and gdf is not None and map_data_exists:
         with st.spinner("Loading map data..."):
             map_data = get_prebuilt_data_for_map()
         
