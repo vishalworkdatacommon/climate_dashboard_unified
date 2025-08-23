@@ -1,9 +1,30 @@
+# -*- coding: utf-8 -*-
 import streamlit as st
 import warnings
 import plotly.graph_objects as go
 from datetime import datetime
 import os
 import subprocess
+import toml
+
+# --- Theme Configuration ---
+# This must be the first Streamlit command.
+def _get_theme():
+    query_params = st.query_params
+    theme_name = query_params.get("theme", "Light").lower()
+    theme_file = f".streamlit/{theme_name}.toml"
+    try:
+        return toml.load(theme_file)
+    except FileNotFoundError:
+        return None
+
+st.set_page_config(
+    page_title="U.S. County-Level Drought Analysis",
+    page_icon=None,
+    layout="wide",
+    initial_sidebar_state="expanded",
+    theme=_get_theme()
+)
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_prebuilt_data_for_map
@@ -27,13 +48,7 @@ PARQUET_PATH = "climate_indices.parquet"
 if not os.path.exists(PARQUET_PATH):
     st.warning(f"Map data file not found. Automatically running build script... (This may take a few minutes)")
     try:
-        # Use subprocess to run the build script
-        process = subprocess.run(
-            ["python3", "build_data.py"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
+        process = subprocess.run(["python3", "build_data.py"], capture_output=True, text=True, check=True)
         st.success("Map data file built successfully!")
         st.rerun()
     except subprocess.CalledProcessError as e:
@@ -41,29 +56,16 @@ if not os.path.exists(PARQUET_PATH):
         st.code(e.stderr)
         st.stop()
 
-
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = []
 
-
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="U.S. County-Level Drought Analysis",
-    page_icon=None,
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
-
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
 
-
 def main() -> None:
     st.title("U.S. County-Level Drought Analysis")
-    st.markdown(
-        "Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA."
-    )
+    st.markdown("Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA.")
 
     fips_options = get_county_options()
     gdf = get_geojson()
@@ -73,16 +75,11 @@ def main() -> None:
         st.info(f"Data is fetched live. Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
         if fips_options.empty:
-            st.error("County list could not be loaded. The dashboard cannot be displayed.")
+            st.error("County list could not be loaded.")
             st.stop()
 
-        index_choice = st.selectbox(
-            "1. Select Climate Index:",
-            options=["PDSI", "SPI", "SPEI"],
-            key="index_selectbox",
-        )
+        index_choice = st.selectbox("1. Select Climate Index:", ["PDSI", "SPI", "SPEI"], key="index_selectbox")
 
-        # Use session state for the multiselect default
         fips_code_inputs = st.multiselect(
             "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
@@ -93,18 +90,32 @@ def main() -> None:
         )
         st.session_state.selected_fips = fips_code_inputs
 
-        # Analysis selection is now in the main panel for single-county view
+        st.divider()
+        
+        # --- Smart Theme Selector ---
+        theme_options = ["Light", "Dark", "Contrast"]
+        current_theme = st.query_params.get("theme", "Light")
+        
+        def on_theme_change():
+            new_theme = st.session_state.theme_selectbox
+            st.rerun(query_params={"theme": new_theme})
+
+        st.selectbox(
+            "Select Theme:",
+            theme_options,
+            index=theme_options.index(current_theme) if current_theme in theme_options else 0,
+            key="theme_selectbox",
+            on_change=on_theme_change
+        )
+        
         analysis_choice = None
         if len(fips_code_inputs) > 1:
             analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
-            analysis_choice = st.selectbox(
-                "3. Select Analysis:", analysis_options, key="analysis_selectbox"
-            )
+            analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
     # --- Interactive Map ---
     show_map = st.checkbox("Show Interactive Map Selector")
     if show_map and gdf is not None:
-        # Use the fast, pre-built data for the map's choropleth
         with st.spinner("Loading map data..."):
             map_data = get_prebuilt_data_for_map()
         
@@ -112,7 +123,7 @@ def main() -> None:
             last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
             if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(last_clicked_fips)
-                st.rerun() # Rerun to update the multiselect widget
+                st.rerun()
 
     if not fips_code_inputs:
         st.warning("Please select at least one county from the sidebar or map to begin.")
@@ -121,7 +132,7 @@ def main() -> None:
     # --- Data Fetching for Analysis ---
     full_data = get_live_data_for_counties(fips_code_inputs)
     if full_data.empty:
-        st.warning("No data could be fetched for the selected counties. Please try other selections or check back later.")
+        st.warning("No data could be fetched for the selected counties.")
         st.stop()
 
     # --- Main Panel Logic ---
@@ -130,55 +141,36 @@ def main() -> None:
     if len(fips_code_inputs) == 1:
         st.header(selected_county_names[0])
         st.caption(f"Climate Index: {index_choice}")
-        # ... (rest of the single-county tabbed layout)
-    elif len(fips_code_inputs) > 1:
-        st.header(f"{analysis_choice}: {index_choice}")
-        st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
-        # ... (rest of the multi-county layout)
-
-    # (The rest of the app logic for plotting and analysis remains the same)
-    # ... (omitted for brevity, but it's the same as the previous version)
-    if len(fips_code_inputs) == 1:
-        # Single-county view with tabs
-        (
-            tab1, tab2, tab3, tab4, tab5
-        ) = st.tabs([
-            "Trend Analysis", "Anomaly Detection", "Seasonal Decomposition", 
-            "Autocorrelation", "Forecasting"
-        ])
-
+        
+        tabs = st.tabs(["Trend Analysis", "Anomaly Detection", "Seasonal Decomposition", "Autocorrelation", "Forecasting"])
+        
         fips_code = fips_code_inputs[0]
-        filtered_df = full_data[
-            (full_data["countyfips"] == fips_code)
-            & (full_data["index_type"] == index_choice)
-        ]
+        filtered_df = full_data[(full_data["countyfips"] == fips_code) & (full_data["index_type"] == index_choice)]
+        
         if not filtered_df.empty:
             time_series = filtered_df.set_index("date")["Value"].asfreq("MS")
-
-            with tab1:
+            
+            with tabs[0]:
                 fig = plot_trend_analysis(time_series, index_choice)
                 st.plotly_chart(fig, use_container_width=True)
                 display_historical_insights(time_series)
-            with tab2:
+            with tabs[1]:
                 fig = plot_anomaly_detection(time_series, index_choice)
                 st.plotly_chart(fig, use_container_width=True)
                 display_historical_insights(time_series)
-            with tab3:
+            with tabs[2]:
                 fig = plot_seasonal_decomposition(time_series, index_choice)
                 st.plotly_chart(fig, use_container_width=True)
-            with tab4:
+            with tabs[3]:
                 fig = plot_autocorrelation(time_series, index_choice)
                 st.plotly_chart(fig, use_container_width=True)
-            with tab5:
+            with tabs[4]:
                 st.subheader("Forecasting Controls")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    model_choice = st.selectbox("Model:", ["ARIMA", "Prophet", "Both"], key="model_selectbox")
-                with col2:
-                    forecast_horizon = st.slider("Horizon (Months):", 6, 48, 24, 6, key="horizon_slider")
-                with col3:
-                    scenario = st.selectbox("Scenario:", ["Normal", "Wetter", "Drier"], key="scenario_selectbox", help="Simulate future conditions.")
-
+                c1, c2, c3 = st.columns(3)
+                model_choice = c1.selectbox("Model:", ["ARIMA", "Prophet", "Both"], key="model_selectbox")
+                forecast_horizon = c2.slider("Horizon (Months):", 6, 48, 24, 6, key="horizon_slider")
+                scenario = c3.selectbox("Scenario:", ["Normal", "Wetter", "Drier"], key="scenario_selectbox", help="Simulate future conditions.")
+                
                 if model_choice == "Prophet":
                     fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario)
                 elif model_choice == "ARIMA":
@@ -188,24 +180,21 @@ def main() -> None:
                 
                 st.plotly_chart(fig, use_container_width=True)
                 if model_choice == "Both":
-                    st.subheader("Model Performance on Historical Data (Last 12 Months)")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.markdown("##### ARIMA"); st.metric("MAE", f"{metrics['arima_mae']:.4f}"); st.metric("RMSE", f"{metrics['arima_rmse']:.4f}"); st.metric("MAPE", f"{metrics['arima_mape']:.2%}")
-                    with col2:
-                        st.markdown("##### Prophet"); st.metric("MAE", f"{metrics['prophet_mae']:.4f}"); st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}"); st.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
+                    st.subheader("Model Performance (Last 12 Months)")
+                    m1, m2 = st.columns(2)
+                    m1.markdown("##### ARIMA"); m1.metric("MAE", f"{metrics['arima_mae']:.4f}"); m1.metric("RMSE", f"{metrics['arima_rmse']:.4f}"); m1.metric("MAPE", f"{metrics['arima_mape']:.2%}")
+                    m2.markdown("##### Prophet"); m2.metric("MAE", f"{metrics['prophet_mae']:.4f}"); m2.metric("RMSE", f"{metrics['prophet_rmse']:.4f}"); m2.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
 
     elif len(fips_code_inputs) > 1:
-        # Multi-county view
+        st.header(f"{analysis_choice}: {index_choice}")
+        st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
+        
         if analysis_choice == "Comparison Mode":
             plot_comparison_mode(full_data, fips_code_inputs, index_choice)
         else:
             fig = go.Figure()
             for fips_code in fips_code_inputs:
-                filtered_df = full_data[
-                    (full_data["countyfips"] == fips_code)
-                    & (full_data["index_type"] == index_choice)
-                ]
+                filtered_df = full_data[(full_data["countyfips"] == fips_code) & (full_data["index_type"] == index_choice)]
                 if not filtered_df.empty:
                     time_series = filtered_df.set_index("date")["Value"].asfreq("MS")
                     county_name = fips_options.get(fips_code, "Unknown")
@@ -226,7 +215,6 @@ def main() -> None:
             )
             st.plotly_chart(fig, use_container_width=True)
     
-    # --- Download Button ---
     st.sidebar.download_button(
         label="Download Selected Data (CSV)",
         data=full_data.to_csv(index=False).encode("utf-8"),
