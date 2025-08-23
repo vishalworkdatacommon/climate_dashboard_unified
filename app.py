@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 # from streamlit_folium import folium_static
 
 # --- Custom Modules ---
-from data_loader import get_live_data
+from data_loader import get_prebuilt_data
 from plotting import (
     plot_trend_analysis,
     plot_anomaly_detection,
@@ -45,7 +45,7 @@ def main() -> None:
             """
         )
 
-    full_data, fips_options, gdf, last_updated = get_live_data()
+    full_data, fips_options, gdf, last_updated = get_prebuilt_data()
 
     with st.sidebar:
         st.header("Dashboard Controls")
