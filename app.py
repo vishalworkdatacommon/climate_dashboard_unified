@@ -65,7 +65,7 @@ def main() -> None:
             "2. Select County/Counties:",
             options=fips_options.index.tolist(),
             format_func=lambda x: fips_options.get(x, "Unknown County"),
-            default=["06037", "12086", "17031", "48201", "36061"],
+            default=fips_options.index.tolist()[:5],
             key="fips_multiselect",
         )
 
