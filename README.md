@@ -5,6 +5,7 @@ colorFrom: blue
 colorTo: green
 sdk: streamlit
 sdk_version: "1.48.1"
+python_version: "3.11"
 app_file: app.py
 pinned: false
 ---
@@ -14,9 +15,6 @@ pinned: false
 ![Update Climate Data](https://github.com/vishalworkdatacommon/climate_dashboard_unified/actions/workflows/update_climate_data.yml/badge.svg)
 
 An interactive web application for analyzing, visualizing, and forecasting key drought indices for any county in the United States. This dashboard provides a powerful tool for researchers, policymakers, and climate enthusiasts to explore historical trends and predict future conditions.
-
-<!-- TODO: Add a high-quality screenshot or GIF of the dashboard in action -->
-![Dashboard Screenshot](placeholder.png)
 
 ---
 
