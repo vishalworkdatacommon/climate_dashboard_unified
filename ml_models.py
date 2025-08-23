@@ -72,7 +72,7 @@ def plot_forecasting_arima(
         )
     )
     fig.update_layout(
-        title=f"{index_type} ARIMA Forecast (24-Month Horizon)",
+        title=f"{index_type} ARIMA Forecast ({n_periods}-Month Horizon)",
         xaxis_title="Year",
         yaxis_title=f"{index_type} Value",
         legend=dict(x=0.01, y=0.99, bordercolor="Black", borderwidth=1),
@@ -142,7 +142,7 @@ def plot_forecasting_prophet(
     )
 
     fig.update_layout(
-        title=f"{index_type} Prophet Forecast (24-Month Horizon)",
+        title=f"{index_type} Prophet Forecast ({n_periods}-Month Horizon)",
         xaxis_title="Year",
         yaxis_title=f"{index_type} Value",
         legend=dict(x=0.01, y=0.99, bordercolor="Black", borderwidth=1),
@@ -312,7 +312,7 @@ def plot_forecasting_both(
     )
 
     fig.update_layout(
-        title=f"{index_type} ARIMA vs. Prophet Forecast (24-Month Horizon)",
+        title=f"{index_type} ARIMA vs. Prophet Forecast ({n_periods}-Month Horizon)",
         xaxis_title="Year",
         yaxis_title=f"{index_type} Value",
         legend=dict(x=0.01, y=0.99, bordercolor="Black", borderwidth=1),

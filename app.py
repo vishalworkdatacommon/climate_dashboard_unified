@@ -142,7 +142,7 @@ def main() -> None:
             "Anomaly Detection": "This analysis highlights periods that were unusually wet or dry. The red dots mark months where the index value was significantly different (more than two standard deviations) from the 12-month rolling average, indicating extreme conditions.",
             "Seasonal Decomposition": "This technique breaks down the time series into three components: the long-term **Trend**, the repeating annual **Seasonal** cycle, and the irregular **Residual** noise. This helps to understand the underlying patterns driving the index values.",
             "Autocorrelation": "These plots show how correlated the index is with itself at different points in time. The ACF (Autocorrelation Function) and PACF (Partial Autocorrelation Function) are used in statistical modeling to identify how much past values influence future values.",
-            "Forecasting": "This chart displays a 24-month forecast of the climate index. You can choose between two models: **auto-ARIMA**, a powerful statistical model for time series data, and **Prophet**, a forecasting tool from Facebook that excels with seasonal data. The shaded area represents the 95% confidence interval.",
+            "Forecasting": f"This chart displays a {forecast_horizon}-month forecast of the climate index. You can choose between two models: **auto-ARIMA**, a powerful statistical model for time series data, and **Prophet**, a forecasting tool from Facebook that excels with seasonal data. The shaded area represents the 95% confidence interval.",
         }
         st.info(analysis_explanations[analysis_choice])
 
