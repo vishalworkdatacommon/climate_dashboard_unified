@@ -62,11 +62,11 @@ def main() -> None:
         )
 
         fips_code_inputs = st.multiselect(
-            "2. Select County/Counties:",
+            "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
             format_func=lambda x: fips_options.get(x, "Unknown County"),
-            default=fips_options.index.tolist()[:5],
             key="fips_multiselect",
+            help="You can type to search for a county and select multiple counties for comparison.",
         )
 
         if len(fips_code_inputs) > 1:
