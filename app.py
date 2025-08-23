@@ -96,7 +96,8 @@ def main() -> None:
     # --- Main Panel Logic ---
     if len(fips_code_inputs) == 1:
         # Single-county view with tabs
-        st.header(f"Analysis for {selected_county_names[0]} | {index_choice}")
+        st.header(f"Analysis for: {selected_county_names[0]}")
+        st.subheader(f"Climate Index: {index_choice}")
 
         (
             tab1, tab2, tab3, tab4, tab5
