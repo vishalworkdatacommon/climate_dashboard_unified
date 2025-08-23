@@ -43,12 +43,13 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
     with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
         all_data = []
-        fips_filter = ",".join([f"'{fips}'" for fips in county_fips_list])
+        where_clause = " OR ".join([f"countyfips='{fips}'" for fips in county_fips_list])
 
         for index_type, base_url in DATA_URLS.items():
             try:
-                soql_query = f"?$limit=10000000&$where=countyfips IN({fips_filter})"
-                full_url = base_url + soql_query.replace(" ", "%20")
+                # Use quote on the entire where clause for proper encoding
+                soql_query = f"?$limit=10000000&$where={quote(where_clause)}"
+                full_url = base_url + soql_query
                 df = pd.read_csv(full_url)
 
                 df["month"] = df["month"].map("{:02}".format)
