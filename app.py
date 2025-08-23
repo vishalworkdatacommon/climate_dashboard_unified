@@ -19,6 +19,7 @@ from ml_models import (
     plot_forecasting_prophet,
     plot_forecasting_both,
 )
+from map_view import create_interactive_map
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -30,6 +31,9 @@ st.set_page_config(
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
 
+# --- Session State Initialization ---
+if 'selected_fips' not in st.session_state:
+    st.session_state.selected_fips = []
 
 def main() -> None:
     st.title("U.S. County-Level Drought Analysis")
@@ -37,17 +41,8 @@ def main() -> None:
         "Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA."
     )
 
-    with st.expander("About the Climate Indices"):
-        st.markdown(
-            """
-            - **PDSI (Palmer Drought Severity Index):** Measures long-term drought based on temperature and precipitation data.
-            - **SPI (Standardized Precipitation Index):** Shows how precipitation compares to the long-term average for a given period.
-            - **SPEI (Standardized Precipitation-Evapotranspiration Index):** Similar to SPI, but also includes the effect of temperature on water demand.
-            """
-        )
-
     fips_options = get_county_options()
-    # gdf = get_geojson() # Reserved for future map implementation
+    gdf = get_geojson()
 
     with st.sidebar:
         st.header("Dashboard Controls")
@@ -63,15 +58,17 @@ def main() -> None:
             key="index_selectbox",
         )
 
+        # Use session state for the multiselect default
         fips_code_inputs = st.multiselect(
             "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
             format_func=lambda x: fips_options.get(x, "Unknown County"),
             key="fips_multiselect",
-            help="You can type to search for a county and select multiple counties for comparison.",
+            help="You can type to search, select multiple counties, or click on the map.",
+            default=st.session_state.selected_fips
         )
+        st.session_state.selected_fips = fips_code_inputs
 
-        # Analysis selection is now in the main panel for single-county view
         analysis_choice = None
         if len(fips_code_inputs) > 1:
             analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
@@ -79,26 +76,45 @@ def main() -> None:
                 "3. Select Analysis:", analysis_options, key="analysis_selectbox"
             )
 
+    # --- Interactive Map ---
+    show_map = st.checkbox("Show Interactive Map Selector")
+    if show_map and gdf is not None:
+        # Fetch data for ALL counties for the map choropleth
+        with st.spinner("Loading map data... This may take a moment."):
+            all_county_data = get_live_data_for_counties(fips_options.index.tolist())
+        
+        if not all_county_data.empty:
+            last_clicked_fips = create_interactive_map(gdf, all_county_data, index_choice)
+            if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
+                st.session_state.selected_fips.append(last_clicked_fips)
+                st.rerun() # Rerun to update the multiselect widget
+
     if not fips_code_inputs:
-        st.warning("Please select at least one county from the sidebar to begin.")
+        st.warning("Please select at least one county from the sidebar or map to begin.")
         st.stop()
 
-    # --- Data Fetching ---
+    # --- Data Fetching for Analysis ---
     full_data = get_live_data_for_counties(fips_code_inputs)
-
     if full_data.empty:
         st.warning("No data could be fetched for the selected counties. Please try other selections or check back later.")
         st.stop()
 
-    # --- UI Rendering ---
+    # --- Main Panel Logic ---
     selected_county_names = [fips_options.get(fips, "Unknown") for fips in fips_code_inputs]
     
-    # --- Main Panel Logic ---
     if len(fips_code_inputs) == 1:
-        # Single-county view with tabs
         st.header(selected_county_names[0])
         st.caption(f"Climate Index: {index_choice}")
+        # ... (rest of the single-county tabbed layout)
+    elif len(fips_code_inputs) > 1:
+        st.header(f"{analysis_choice}: {index_choice}")
+        st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
+        # ... (rest of the multi-county layout)
 
+    # (The rest of the app logic for plotting and analysis remains the same)
+    # ... (omitted for brevity, but it's the same as the previous version)
+    if len(fips_code_inputs) == 1:
+        # Single-county view with tabs
         (
             tab1, tab2, tab3, tab4, tab5
         ) = st.tabs([
@@ -156,9 +172,6 @@ def main() -> None:
 
     elif len(fips_code_inputs) > 1:
         # Multi-county view
-        st.header(f"{analysis_choice}: {index_choice}")
-        st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
-
         if analysis_choice == "Comparison Mode":
             plot_comparison_mode(full_data, fips_code_inputs, index_choice)
         else:
