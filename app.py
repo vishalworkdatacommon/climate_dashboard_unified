@@ -6,26 +6,19 @@ from datetime import datetime
 import os
 import subprocess
 import toml
+import time
 
 # --- Smart Theme Configuration ---
-# This must be the first Streamlit command.
 def apply_theme_from_query_params():
-    """
-    Reads the 'theme' from the URL query parameters, loads the corresponding
-    .toml file, and overwrites the main config.toml. This is the robust
-    way to apply themes in all Streamlit environments.
-    """
     query_params = st.query_params
     theme_name = query_params.get("theme", "Light").lower()
     theme_file = f".streamlit/{theme_name}.toml"
-    
     try:
         with open(theme_file, "r") as f:
             theme_config = f.read()
         with open(".streamlit/config.toml", "w") as f:
             f.write(theme_config)
     except FileNotFoundError:
-        # Default to light theme if the file is not found
         with open(".streamlit/light.toml", "r") as f:
             theme_config = f.read()
         with open(".streamlit/config.toml", "w") as f:
@@ -60,20 +53,23 @@ from map_view import create_interactive_map
 # --- Initial Setup: Smartly handle pre-built data ---
 PARQUET_PATH = "climate_indices.parquet"
 if not os.path.exists(PARQUET_PATH):
-    # Check if the build process is already running
     if 'build_process_running' not in st.session_state:
         st.session_state.build_process_running = True
         try:
-            # Run the build script in the background
             subprocess.Popen(["python3", "build_data.py"])
         except Exception as e:
             st.error(f"Failed to start the data build process: {e}")
             st.session_state.build_process_running = False
+    
+    # Show a placeholder and auto-refresh
+    st.info("Map data is being prepared in the background. The dashboard will automatically refresh when it's ready.")
+    while not os.path.exists(PARQUET_PATH):
+        time.sleep(5)
+    st.rerun()
 
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = []
-
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
@@ -107,7 +103,6 @@ def main() -> None:
 
         st.divider()
         
-        # --- Smart Theme Selector ---
         theme_options = ["Light", "Dark", "Contrast"]
         current_theme = st.query_params.get("theme", "Light")
         
@@ -129,13 +124,8 @@ def main() -> None:
             analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
     # --- Interactive Map ---
-    map_data_exists = os.path.exists(PARQUET_PATH)
-    show_map = st.checkbox("Show Interactive Map Selector", value=True, disabled=not map_data_exists)
-    
-    if not map_data_exists:
-        st.info("The interactive map is currently being prepared and will be available shortly. Please refresh in a few minutes.")
-
-    if show_map and gdf is not None and map_data_exists:
+    show_map = st.checkbox("Show Interactive Map Selector", value=True)
+    if show_map and gdf is not None:
         with st.spinner("Loading map data..."):
             map_data = get_prebuilt_data_for_map()
         
