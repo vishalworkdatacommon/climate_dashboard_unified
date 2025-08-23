@@ -85,6 +85,7 @@ def main() -> None:
 
         model_choice = "ARIMA"
         forecast_horizon = 24
+        scenario = "Normal"
         if analysis_choice == "Forecasting":
             model_choice = st.selectbox(
                 "4. Select Forecasting Model:",
@@ -98,6 +99,12 @@ def main() -> None:
                 value=24,
                 step=6,
                 key="horizon_slider",
+            )
+            scenario = st.selectbox(
+                "6. Select Forecast Scenario:",
+                ["Normal", "Wetter", "Drier"],
+                key="scenario_selectbox",
+                help="Simulate future conditions to see how they might affect the forecast."
             )
 
     if not fips_code_inputs:
@@ -149,11 +156,11 @@ def main() -> None:
             if len(fips_code_inputs) == 1:
                 if analysis_choice == "Forecasting":
                     if model_choice == "Prophet":
-                        fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon)
+                        fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario)
                     elif model_choice == "ARIMA":
-                        fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon)
+                        fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon, scenario)
                     else:  # Both
-                        fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon)
+                        fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon, scenario)
                 else:
                     plot_function_mapping = {
                         "Trend Analysis": plot_trend_analysis,
@@ -191,9 +198,15 @@ def main() -> None:
             st.subheader("Model Performance on Historical Data (Last 12 Months)")
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("##### ARIMA"); st.metric("MAE", f"{metrics['arima_mae']:.4f}"); st.metric("RMSE", f"{metrics['arima_rmse']:.4f}")
+                st.markdown("##### ARIMA")
+                st.metric("MAE", f"{metrics['arima_mae']:.4f}")
+                st.metric("RMSE", f"{metrics['arima_rmse']:.4f}")
+                st.metric("MAPE", f"{metrics['arima_mape']:.2%}")
             with col2:
-                st.markdown("##### Prophet"); st.metric("MAE", f"{metrics['prophet_mae']:.4f}"); st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}")
+                st.markdown("##### Prophet")
+                st.metric("MAE", f"{metrics['prophet_mae']:.4f}")
+                st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}")
+                st.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
     else:
         st.warning("No data available for the selected combination of counties and index. Please make another selection.")
 
