@@ -96,14 +96,13 @@ def main() -> None:
     # --- Main Panel Logic ---
     if len(fips_code_inputs) == 1:
         # Single-county view with tabs
-        st.header(f"Analysis for: {selected_county_names[0]}")
-        st.markdown(f"**Climate Index:** `{index_choice}`")
+        st.header(f"Analysis for {selected_county_names[0]} | {index_choice}")
 
         (
             tab1, tab2, tab3, tab4, tab5
         ) = st.tabs([
-            "📈 Trend Analysis", "📉 Anomaly Detection", "📊 Seasonal Decomposition", 
-            "🔗 Autocorrelation", "🔮 Forecasting"
+            "Trend Analysis", "Anomaly Detection", "Seasonal Decomposition", 
+            "Autocorrelation", "Forecasting"
         ])
 
         fips_code = fips_code_inputs[0]
