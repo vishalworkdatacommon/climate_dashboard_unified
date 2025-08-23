@@ -2,9 +2,11 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import os
-from urllib.error import HTTPError
+import requests
+from io import StringIO
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
+
 
 
 
@@ -43,12 +45,18 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
     with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
         all_data = []
         where_clause = " OR ".join([f"countyfips='{fips}'" for fips in county_fips_list])
-        
+
         for index_type, base_url in DATA_URLS.items():
+            params = {
+                "$limit": 10000000,
+                "$where": where_clause
+            }
             try:
-                soql_query = f"?$limit=10000000&$where={where_clause}"
-                full_url = base_url + soql_query
-                df = pd.read_csv(full_url)
+                response = requests.get(base_url, params=params)
+                response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
+                
+                csv_data = StringIO(response.text)
+                df = pd.read_csv(csv_data)
 
                 df["month"] = df["month"].map("{:02}".format)
                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
@@ -64,12 +72,13 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
                 if all(col in df.columns for col in cols_to_keep):
                     all_data.append(df[cols_to_keep])
 
-            except HTTPError as e:
-                st.error(f"Failed to download {index_type} data due to a server error ({e.code}). The data source may be unavailable.")
+            except requests.exceptions.HTTPError as e:
+                st.error(f"Failed to download {index_type} data due to a server error ({e.response.status_code}). The data source may be unavailable.")
                 continue
             except Exception as e:
                 st.error(f"Failed to load or process data for {index_type}. Error: {e}")
                 continue
+
 
         if not all_data:
             st.warning("Could not load any climate data for the selected counties.")
