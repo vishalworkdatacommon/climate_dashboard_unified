@@ -2,10 +2,10 @@
 import streamlit as st
 import warnings
 import plotly.graph_objects as go
-# from streamlit_folium import folium_static
+from datetime import datetime
 
 # --- Custom Modules ---
-from data_loader import get_prebuilt_data
+from data_loader import get_county_options, get_live_data_for_counties, get_geojson
 from plotting import (
     plot_trend_analysis,
     plot_anomaly_detection,
@@ -17,7 +17,6 @@ from ml_models import (
     plot_forecasting_prophet,
     plot_forecasting_both,
 )
-# from map_view import create_map
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -33,7 +32,7 @@ warnings.filterwarnings("ignore")
 def main() -> None:
     st.title("💧 U.S. County-Level Drought Analysis")
     st.markdown(
-        "Explore and compare key drought indices for any county in the United States. This dashboard uses pre-built data, updated periodically."
+        "Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA."
     )
 
     with st.expander("About the Climate Indices"):
@@ -45,107 +44,98 @@ def main() -> None:
             """
         )
 
-    full_data, fips_options, gdf, last_updated = get_prebuilt_data()
+    fips_options = get_county_options()
+    # gdf = get_geojson() # Reserved for future map implementation
 
     with st.sidebar:
         st.header("Dashboard Controls")
-        if last_updated:
-            st.info(
-                f"Data last updated: {last_updated.strftime('%Y-%m-%d %H:%M:%S')} UTC"
-            )
+        st.info(f"Data is fetched live. Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
-        if not full_data.empty and not fips_options.empty:
-            index_choice = st.selectbox(
-                "1. Select Climate Index:",
-                options=sorted(full_data["index_type"].unique()),
-                key="index_selectbox",
-            )
-
-            default_selection = (
-                [fips_options.index.tolist()[0]] if not fips_options.empty else []
-            )
-            fips_code_inputs = st.multiselect(
-                "2. Select County/Counties:",
-                options=fips_options.index.tolist(),
-                format_func=lambda x: fips_options.loc[x]["display_name"],
-                default=default_selection,
-                key="fips_multiselect",
-            )
-
-            if len(fips_code_inputs) > 1:
-                analysis_options = ["Trend Analysis", "Anomaly Detection"]
-            else:
-                analysis_options = [
-                    "Trend Analysis",
-                    "Anomaly Detection",
-                    "Seasonal Decomposition",
-                    "Autocorrelation",
-                    "Forecasting",
-                ]
-            analysis_choice = st.selectbox(
-                "3. Select Analysis:", analysis_options, key="analysis_selectbox"
-            )
-
-            model_choice = "ARIMA"
-            forecast_horizon = 24
-            if analysis_choice == "Forecasting":
-                model_choice = st.selectbox(
-                    "4. Select Forecasting Model:",
-                    ["ARIMA", "Prophet", "Both"],
-                    key="model_selectbox",
-                )
-                forecast_horizon = st.slider(
-                    "5. Select Forecast Horizon (Months):",
-                    min_value=6,
-                    max_value=48,
-                    value=24,
-                    step=6,
-                    key="horizon_slider",
-                )
-
-            if fips_code_inputs:
-                csv_data = full_data[full_data["countyfips"].isin(fips_code_inputs)]
-                st.download_button(
-                    label="Download Selected Data (CSV)",
-                    data=csv_data.to_csv(index=False).encode("utf-8"),
-                    file_name=f"{index_choice}_data_{'_'.join(fips_code_inputs)}.csv",
-                    mime="text/csv",
-                    key="download_button",
-                )
-        else:
-            st.error("Data could not be loaded. The dashboard cannot be displayed.")
+        if fips_options.empty:
+            st.error("County list could not be loaded. The dashboard cannot be displayed.")
             st.stop()
 
-    # --- Map-based County Selection ---
-    # st.subheader("Select a Month to Display on the Map")
-    # latest_date = full_data['date'].max()
-    # selected_date = st.date_input("Date", value=latest_date, min_value=full_data['date'].min(), max_value=latest_date, key="date_selector")
+        index_choice = st.selectbox(
+            "1. Select Climate Index:",
+            options=["PDSI", "SPI", "SPEI"],
+            key="index_selectbox",
+        )
 
-    # if gdf is not None:
-    #     folium_map = create_map(gdf, full_data, index_choice, selected_date)
-    #     st.subheader("Click on a county to select it for analysis")
-    #     folium_static(folium_map, width=1400)
+        fips_code_inputs = st.multiselect(
+            "2. Select County/Counties:",
+            options=fips_options.index.tolist(),
+            format_func=lambda x: fips_options.get(x, "Unknown County"),
+            default=["06037", "12086", "17031", "48201", "36061"],
+            key="fips_multiselect",
+        )
+
+        if len(fips_code_inputs) > 1:
+            analysis_options = ["Trend Analysis", "Anomaly Detection"]
+        else:
+            analysis_options = [
+                "Trend Analysis",
+                "Anomaly Detection",
+                "Seasonal Decomposition",
+                "Autocorrelation",
+                "Forecasting",
+            ]
+        analysis_choice = st.selectbox(
+            "3. Select Analysis:", analysis_options, key="analysis_selectbox"
+        )
+
+        model_choice = "ARIMA"
+        forecast_horizon = 24
+        if analysis_choice == "Forecasting":
+            model_choice = st.selectbox(
+                "4. Select Forecasting Model:",
+                ["ARIMA", "Prophet", "Both"],
+                key="model_selectbox",
+            )
+            forecast_horizon = st.slider(
+                "5. Select Forecast Horizon (Months):",
+                min_value=6,
+                max_value=48,
+                value=24,
+                step=6,
+                key="horizon_slider",
+            )
 
     if not fips_code_inputs:
         st.warning("Please select at least one county from the sidebar to begin.")
         st.stop()
 
-    selected_county_names = [
-        fips_options.loc[fips]["display_name"] for fips in fips_code_inputs
-    ]
+    # --- Data Fetching ---
+    full_data = get_live_data_for_counties(fips_code_inputs)
+
+    if full_data.empty:
+        st.warning("No data could be fetched for the selected counties. Please try other selections or check back later.")
+        st.stop()
+
+    # --- UI Rendering ---
+    selected_county_names = [fips_options.get(fips, "Unknown") for fips in fips_code_inputs]
     st.header(f"{analysis_choice}: {index_choice}")
     st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
 
     with st.expander("About This Analysis"):
         analysis_explanations = {
-            "Trend Analysis": "This chart shows the monthly index values over time, along with a 12-month rolling average. It helps you see the long-term trends and patterns in the data, smoothing out short-term fluctuations.",
-            "Anomaly Detection": "This analysis highlights periods that were unusually wet or dry. The red dots mark months where the index value was significantly different (more than two standard deviations) from the 12-month rolling average, indicating extreme conditions.",
-            "Seasonal Decomposition": "This technique breaks down the time series into three components: the long-term **Trend**, the repeating annual **Seasonal** cycle, and the irregular **Residual** noise. This helps to understand the underlying patterns driving the index values.",
-            "Autocorrelation": "These plots show how correlated the index is with itself at different points in time. The ACF (Autocorrelation Function) and PACF (Partial Autocorrelation Function) are used in statistical modeling to identify how much past values influence future values.",
-            "Forecasting": f"This chart displays a {forecast_horizon}-month forecast of the climate index. You can choose between two models: **auto-ARIMA**, a powerful statistical model for time series data, and **Prophet**, a forecasting tool from Facebook that excels with seasonal data. The shaded area represents the 95% confidence interval.",
+            "Trend Analysis": "This chart shows the monthly index values over time, along with a 12-month rolling average to visualize long-term trends.",
+            "Anomaly Detection": "This analysis highlights periods of extreme conditions by marking points that deviate significantly (more than two standard deviations) from the 12-month rolling average.",
+            "Seasonal Decomposition": "This breaks down the time series into its core components: the long-term **Trend**, the annual **Seasonal** cycle, and irregular **Residuals**.",
+            "Autocorrelation": "These plots (ACF and PACF) show how past values of the index correlate with future values, which is key for building forecasting models.",
+            "Forecasting": f"This chart displays a {forecast_horizon}-month forecast using **auto-ARIMA** and/or Facebook's **Prophet** model. The shaded area is the 95% confidence interval.",
         }
-        st.info(analysis_explanations[analysis_choice])
+        st.info(analysis_explanations.get(analysis_choice, "Analysis description not available."))
 
+    # --- Download Button ---
+    st.sidebar.download_button(
+        label="Download Selected Data (CSV)",
+        data=full_data.to_csv(index=False).encode("utf-8"),
+        file_name=f"{index_choice}_data_{'_'.join(fips_code_inputs)}.csv",
+        mime="text/csv",
+        key="download_button",
+    )
+
+    # --- Plotting ---
     fig = go.Figure()
     for fips_code in fips_code_inputs:
         filtered_df = full_data[
@@ -154,22 +144,16 @@ def main() -> None:
         ]
         if not filtered_df.empty:
             time_series = filtered_df.set_index("date")["Value"].asfreq("MS")
-            county_name = fips_options.loc[fips_code]["display_name"]
+            county_name = fips_options.get(fips_code, "Unknown")
 
             if len(fips_code_inputs) == 1:
                 if analysis_choice == "Forecasting":
                     if model_choice == "Prophet":
-                        fig = plot_forecasting_prophet(
-                            time_series, index_choice, forecast_horizon
-                        )
+                        fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon)
                     elif model_choice == "ARIMA":
-                        fig = plot_forecasting_arima(
-                            time_series, index_choice, forecast_horizon
-                        )
+                        fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon)
                     else:  # Both
-                        fig, metrics = plot_forecasting_both(
-                            time_series, index_choice, forecast_horizon
-                        )
+                        fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon)
                 else:
                     plot_function_mapping = {
                         "Trend Analysis": plot_trend_analysis,
@@ -177,54 +161,18 @@ def main() -> None:
                         "Seasonal Decomposition": plot_seasonal_decomposition,
                         "Autocorrelation": plot_autocorrelation,
                     }
-                    fig = plot_function_mapping[analysis_choice](
-                        time_series, index_choice
-                    )
+                    fig = plot_function_mapping[analysis_choice](time_series, index_choice)
                 break
 
+            # Multi-county plots (limited to Trend and Anomaly)
             if analysis_choice == "Trend Analysis":
-                rolling_avg = time_series.rolling(window=12).mean()
-                fig.add_trace(
-                    go.Scatter(
-                        x=time_series.index,
-                        y=time_series,
-                        mode="lines",
-                        name=f"{county_name}",
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=rolling_avg.index,
-                        y=rolling_avg,
-                        mode="lines",
-                        name=f"{county_name} (Rolling Avg)",
-                        line=dict(dash="dash"),
-                    )
-                )
+                fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
             elif analysis_choice == "Anomaly Detection":
                 rolling_mean = time_series.rolling(window=12).mean()
                 rolling_std = time_series.rolling(window=12).std()
-                anomalies = time_series[
-                    (time_series > rolling_mean + (2 * rolling_std))
-                    | (time_series < rolling_mean - (2 * rolling_std))
-                ]
-                fig.add_trace(
-                    go.Scatter(
-                        x=time_series.index,
-                        y=time_series,
-                        mode="lines",
-                        name=f"{county_name}",
-                    )
-                )
-                fig.add_trace(
-                    go.Scatter(
-                        x=anomalies.index,
-                        y=anomalies,
-                        mode="markers",
-                        name=f"{county_name} Anomaly",
-                        marker=dict(symbol="x"),
-                    )
-                )
+                anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
+                fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
+                fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode="markers", name=f"{county_name} Anomaly", marker=dict(symbol="x")))
 
     if len(fips_code_inputs) > 1:
         fig.update_layout(
@@ -239,43 +187,18 @@ def main() -> None:
 
     if fig.data:
         st.plotly_chart(fig, use_container_width=True)
-        if "metrics" in locals():
+        if "metrics" in locals() and analysis_choice == "Forecasting" and model_choice == "Both":
             st.subheader("Model Performance on Historical Data (Last 12 Months)")
             col1, col2 = st.columns(2)
             with col1:
-                st.markdown("##### ARIMA")
-                st.metric(
-                    label="Mean Absolute Error (MAE)",
-                    value=f"{metrics['arima_mae']:.4f}",
-                )
-                st.metric(
-                    label="Root Mean Squared Error (RMSE)",
-                    value=f"{metrics['arima_rmse']:.4f}",
-                )
+                st.markdown("##### ARIMA"); st.metric("MAE", f"{metrics['arima_mae']:.4f}"); st.metric("RMSE", f"{metrics['arima_rmse']:.4f}")
             with col2:
-                st.markdown("##### Prophet")
-                st.metric(
-                    label="Mean Absolute Error (MAE)",
-                    value=f"{metrics['prophet_mae']:.4f}",
-                )
-                st.metric(
-                    label="Root Mean Squared Error (RMSE)",
-                    value=f"{metrics['prophet_rmse']:.4f}",
-                )
-
+                st.markdown("##### Prophet"); st.metric("MAE", f"{metrics['prophet_mae']:.4f}"); st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}")
     else:
-        st.warning(
-            "No data available for the selected combination of counties and index. Please make another selection."
-        )
+        st.warning("No data available for the selected combination of counties and index. Please make another selection.")
 
     st.markdown("---")
-    st.markdown(
-        "Data Source: [NOAA National Centers for Environmental Information (NCEI)](https://www.ncei.noa.gov/access/monitoring/nadm/indices)"
-    )
-    st.markdown(
-        "This application provides a comparative tool for various climate indices, allowing for a deeper understanding of regional climate patterns."
-    )
-
+    st.markdown("Data Source: [NOAA National Centers for Environmental Information (NCEI)](https://www.ncei.noa.gov/access/monitoring/nadm/indices)")
 
 if __name__ == "__main__":
     main()

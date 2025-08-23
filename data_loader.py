@@ -2,66 +2,88 @@ import streamlit as st
 import pandas as pd
 import geopandas as gpd
 import os
-from datetime import datetime
-from config import GEOJSON_PATH, FIPS_PATH
-from schemas import climate_data_schema, fips_data_schema
-from typing import Tuple, Optional
-
-# Define the path to the Parquet file
-PARQUET_PATH = os.path.join(os.path.dirname(__file__), "climate_indices.parquet")
+from urllib.error import HTTPError
+from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
+from schemas import climate_data_schema
 
 
 @st.cache_data()
-def get_prebuilt_data() -> Tuple[
-    pd.DataFrame, pd.Series, Optional[gpd.GeoDataFrame], Optional[datetime]
-]:
+def get_county_options() -> pd.Series:
     """
-    Loads pre-built climate data from a local Parquet file and merges it
-    with geospatial data for mapping.
+    Loads FIPS data to populate the county selection dropdown.
+    This is cached as it rarely changes.
     """
-    with st.spinner("Loading pre-built climate and geo data..."):
-        # --- Load Climate Data from Parquet ---
-        if not os.path.exists(PARQUET_PATH):
-            st.error(
-                "Fatal Error: The climate data file (climate_indices.parquet) was not found. Please run the build_data.py script first."
-            )
-            return pd.DataFrame(), pd.Series(), None, None
+    if not os.path.exists(FIPS_PATH):
+        st.error(f"Fatal Error: The FIPS data file was not found at {FIPS_PATH}")
+        return pd.Series(dtype='str')
 
-        try:
-            combined_df = pd.read_parquet(PARQUET_PATH)
-            last_updated = datetime.fromtimestamp(os.path.getmtime(PARQUET_PATH))
-        except Exception as e:
-            st.error(f"Failed to load or process the Parquet data file. Error: {e}")
-            return pd.DataFrame(), pd.Series(), None, None
+    fips_df = pd.read_csv(FIPS_PATH, dtype=str)
+    fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
+    fips_df["county_fips"] = fips_df["county_fips"].str.zfill(3)
+    fips_df["countyfips"] = fips_df["state_fips"] + fips_df["county_fips"]
+    fips_df.rename(columns={"county": "county_name"}, inplace=True)
+    fips_df["display_name"] = fips_df["county_name"] + ", " + fips_df["state"]
 
-        # --- Load Geospatial Data ---
-        if not os.path.exists(GEOJSON_PATH):
-            st.error(
-                "Fatal Error: The GeoJSON file for county boundaries was not found."
-            )
-            return pd.DataFrame(), pd.Series(), None, None
-        gdf = gpd.read_file(GEOJSON_PATH)
-        gdf.rename(columns={"id": "countyfips"}, inplace=True)
+    return (
+        fips_df.sort_values("display_name")
+        .set_index("countyfips")["display_name"]
+    )
 
-        # --- Load FIPS Data ---
-        if not os.path.exists(FIPS_PATH):
-            st.error("Fatal Error: The FIPS data file was not found.")
-            return pd.DataFrame(), pd.Series(), None, None
 
-        fips_df = pd.read_csv(FIPS_PATH)
-        fips_df["state_fips"] = fips_df["state_fips"].astype(str).str.zfill(2)
-        fips_df["county_fips"] = fips_df["county_fips"].astype(str).str.zfill(3)
+@st.cache_data(ttl="1h")
+def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
+    """
+    Fetches and processes live climate data for a specific list of counties
+    using the Socrata API. The result is cached for 1 hour.
+    """
+    if not county_fips_list:
+        return pd.DataFrame()
+
+    with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
+        all_data = []
+        fips_filter = ",".join([f"'{fips}'" for fips in county_fips_list])
+
+        for index_type, base_url in DATA_URLS.items():
+            try:
+                soql_query = f"?$limit=10000000&$where=countyfips IN({fips_filter})"
+                full_url = base_url + soql_query
+                df = pd.read_csv(full_url)
+
+                df["month"] = df["month"].map("{:02}".format)
+                df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+                if "fips" in df.columns:
+                    df.rename(columns={"fips": "countyfips"}, inplace=True)
+                df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
+
+                value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
+                df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+                df["index_type"] = index_type
+
+                cols_to_keep = ["date", "countyfips", "Value", "index_type"]
+                if all(col in df.columns for col in cols_to_keep):
+                    all_data.append(df[cols_to_keep])
+
+            except HTTPError as e:
+                st.error(f"Failed to download {index_type} data due to a server error ({e.code}). The data source may be unavailable.")
+                continue
+            except Exception as e:
+                st.error(f"Failed to load or process data for {index_type}. Error: {e}")
+                continue
+
+        if not all_data:
+            st.warning("Could not load any climate data for the selected counties.")
+            return pd.DataFrame()
+
+        combined_df = pd.concat(all_data, ignore_index=True)
+        combined_df["date"] = pd.to_datetime(combined_df["date"])
+
+        # Merge with FIPS data to get display names
+        fips_df = pd.read_csv(FIPS_PATH, dtype=str)
+        fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
+        fips_df["county_fips"] = fips_df["county_fips"].str.zfill(3)
         fips_df["countyfips"] = fips_df["state_fips"] + fips_df["county_fips"]
         fips_df.rename(columns={"county": "county_name"}, inplace=True)
 
-        # --- Validate FIPS Data ---
-        try:
-            fips_df = fips_data_schema.validate(fips_df)
-        except Exception as e:
-            st.error(f"FIPS data validation failed: {e}")
-            return pd.DataFrame(), pd.Series(), None, None
-
-        # --- Merge and Finalize ---
         df = pd.merge(
             combined_df,
             fips_df[["countyfips", "county_name", "state"]],
@@ -71,18 +93,22 @@ def get_prebuilt_data() -> Tuple[
         df.dropna(subset=["county_name", "state"], inplace=True)
         df["display_name"] = df["county_name"] + ", " + df["state"]
 
-        # --- Validate Final Data ---
         try:
-            df = climate_data_schema.validate(df)
+            return climate_data_schema.validate(df)
         except Exception as e:
             st.error(f"Final data validation failed after merge: {e}")
-            return pd.DataFrame(), pd.Series(), None, None
+            return pd.DataFrame()
 
-        fips_options = (
-            df[["countyfips", "display_name"]]
-            .drop_duplicates()
-            .sort_values("display_name")
-            .set_index("countyfips")
-        )
 
-        return df, fips_options, gdf, last_updated
+@st.cache_data()
+def get_geojson() -> gpd.GeoDataFrame | None:
+    """
+    Loads the GeoJSON file for county boundaries.
+    Cached indefinitely as it's a static file.
+    """
+    if not os.path.exists(GEOJSON_PATH):
+        st.error(f"Fatal Error: The GeoJSON file was not found at {GEOJSON_PATH}")
+        return None
+    gdf = gpd.read_file(GEOJSON_PATH)
+    gdf.rename(columns={"id": "countyfips"}, inplace=True)
+    return gdf
