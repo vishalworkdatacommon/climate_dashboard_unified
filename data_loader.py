@@ -3,8 +3,10 @@ import pandas as pd
 import geopandas as gpd
 import os
 from urllib.error import HTTPError
+from urllib.parse import quote
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
+
 
 
 @st.cache_data()
@@ -45,7 +47,8 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
         for index_type, base_url in DATA_URLS.items():
             try:
-                soql_query = f"?$limit=10000000&$where=countyfips IN({fips_filter})"
+                where_clause = f"countyfips IN({fips_filter})"
+                soql_query = f"?$limit=10000000&$where={quote(where_clause)}"
                 full_url = base_url + soql_query
                 df = pd.read_csv(full_url)
 
