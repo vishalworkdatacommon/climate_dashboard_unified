@@ -96,12 +96,8 @@ def main() -> None:
     # --- Main Panel Logic ---
     if len(fips_code_inputs) == 1:
         # Single-county view with tabs
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(f"### {selected_county_names[0]}")
-        with col2:
-            st.markdown(f"### <p style='text-align: right;'>{index_choice}</p>", unsafe_allow_html=True)
-        st.divider()
+        st.header(selected_county_names[0])
+        st.caption(f"Climate Index: {index_choice}")
 
         (
             tab1, tab2, tab3, tab4, tab5
