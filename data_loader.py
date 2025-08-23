@@ -46,6 +46,7 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
     # --- Caching Logic ---
     CACHE_DIR = "cache"
+    os.makedirs(CACHE_DIR, exist_ok=True)  # Ensure the cache directory exists
     CACHE_EXPIRATION_SECONDS = 24 * 60 * 60  # 24 hours
 
     # Create a unique hash for the list of counties to use as a filename
