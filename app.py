@@ -11,6 +11,7 @@ from plotting import (
     plot_anomaly_detection,
     plot_seasonal_decomposition,
     plot_autocorrelation,
+    plot_comparison_mode,
 )
 from ml_models import (
     plot_forecasting_arima,
@@ -70,7 +71,7 @@ def main() -> None:
         )
 
         if len(fips_code_inputs) > 1:
-            analysis_options = ["Trend Analysis", "Anomaly Detection"]
+            analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
         else:
             analysis_options = [
                 "Trend Analysis",
@@ -143,72 +144,75 @@ def main() -> None:
     )
 
     # --- Plotting ---
-    fig = go.Figure()
-    for fips_code in fips_code_inputs:
-        filtered_df = full_data[
-            (full_data["countyfips"] == fips_code)
-            & (full_data["index_type"] == index_choice)
-        ]
-        if not filtered_df.empty:
-            time_series = filtered_df.set_index("date")["Value"].asfreq("MS")
-            county_name = fips_options.get(fips_code, "Unknown")
-
-            if len(fips_code_inputs) == 1:
-                if analysis_choice == "Forecasting":
-                    if model_choice == "Prophet":
-                        fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario)
-                    elif model_choice == "ARIMA":
-                        fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon, scenario)
-                    else:  # Both
-                        fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon, scenario)
-                else:
-                    plot_function_mapping = {
-                        "Trend Analysis": plot_trend_analysis,
-                        "Anomaly Detection": plot_anomaly_detection,
-                        "Seasonal Decomposition": plot_seasonal_decomposition,
-                        "Autocorrelation": plot_autocorrelation,
-                    }
-                    fig = plot_function_mapping[analysis_choice](time_series, index_choice)
-                break
-
-            # Multi-county plots (limited to Trend and Anomaly)
-            if analysis_choice == "Trend Analysis":
-                fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
-            elif analysis_choice == "Anomaly Detection":
-                rolling_mean = time_series.rolling(window=12).mean()
-                rolling_std = time_series.rolling(window=12).std()
-                anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
-                fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
-                fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode="markers", name=f"{county_name} Anomaly", marker=dict(symbol="x")))
-
-    if len(fips_code_inputs) > 1:
-        fig.update_layout(
-            title=f"{index_choice} {analysis_choice}",
-            xaxis_title="Year",
-            yaxis_title=f"{index_choice} Value",
-            legend_title="Counties",
-            template="plotly_white",
-            font=dict(size=14),
-            height=600,
-        )
-
-    if fig.data:
-        st.plotly_chart(fig, use_container_width=True)
-        if "metrics" in locals() and analysis_choice == "Forecasting" and model_choice == "Both":
-            st.subheader("Model Performance on Historical Data (Last 12 Months)")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("##### ARIMA")
-                st.metric("MAE", f"{metrics['arima_mae']:.4f}")
-                st.metric("RMSE", f"{metrics['arima_rmse']:.4f}")
-                st.metric("MAPE", f"{metrics['arima_mape']:.2%}")
-            with col2:
-                st.markdown("##### Prophet")
-                st.metric("MAE", f"{metrics['prophet_mae']:.4f}")
-                st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}")
-                st.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
+    if analysis_choice == "Comparison Mode":
+        plot_comparison_mode(full_data, fips_code_inputs, index_choice)
     else:
-        st.warning("No data available for the selected combination of counties and index. Please make another selection.")
+        fig = go.Figure()
+        for fips_code in fips_code_inputs:
+            filtered_df = full_data[
+                (full_data["countyfips"] == fips_code)
+                & (full_data["index_type"] == index_choice)
+            ]
+            if not filtered_df.empty:
+                time_series = filtered_df.set_index("date")["Value"].asfreq("MS")
+                county_name = fips_options.get(fips_code, "Unknown")
+
+                if len(fips_code_inputs) == 1:
+                    if analysis_choice == "Forecasting":
+                        if model_choice == "Prophet":
+                            fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario)
+                        elif model_choice == "ARIMA":
+                            fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon, scenario)
+                        else:  # Both
+                            fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon, scenario)
+                    else:
+                        plot_function_mapping = {
+                            "Trend Analysis": plot_trend_analysis,
+                            "Anomaly Detection": plot_anomaly_detection,
+                            "Seasonal Decomposition": plot_seasonal_decomposition,
+                            "Autocorrelation": plot_autocorrelation,
+                        }
+                        fig = plot_function_mapping[analysis_choice](time_series, index_choice)
+                    break
+
+                # Multi-county plots (limited to Trend and Anomaly)
+                if analysis_choice == "Trend Analysis":
+                    fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
+                elif analysis_choice == "Anomaly Detection":
+                    rolling_mean = time_series.rolling(window=12).mean()
+                    rolling_std = time_series.rolling(window=12).std()
+                    anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
+                    fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
+                    fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode="markers", name=f"{county_name} Anomaly", marker=dict(symbol="x")))
+
+        if len(fips_code_inputs) > 1 and analysis_choice != "Comparison Mode":
+            fig.update_layout(
+                title=f"{index_choice} {analysis_choice}",
+                xaxis_title="Year",
+                yaxis_title=f"{index_choice} Value",
+                legend_title="Counties",
+                template="plotly_white",
+                font=dict(size=14),
+                height=600,
+            )
+
+        if fig.data:
+            st.plotly_chart(fig, use_container_width=True)
+            if "metrics" in locals() and analysis_choice == "Forecasting" and model_choice == "Both":
+                st.subheader("Model Performance on Historical Data (Last 12 Months)")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("##### ARIMA")
+                    st.metric("MAE", f"{metrics['arima_mae']:.4f}")
+                    st.metric("RMSE", f"{metrics['arima_rmse']:.4f}")
+                    st.metric("MAPE", f"{metrics['arima_mape']:.2%}")
+                with col2:
+                    st.markdown("##### Prophet")
+                    st.metric("MAE", f"{metrics['prophet_mae']:.4f}")
+                    st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}")
+                    st.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
+        else:
+            st.warning("No data available for the selected combination of counties and index. Please make another selection.")
 
     st.markdown("---")
     st.markdown("Data Source: [NOAA National Centers for Environmental Information (NCEI)](https://www.ncei.noa.gov/access/monitoring/nadm/indices)")

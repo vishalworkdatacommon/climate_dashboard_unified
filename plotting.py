@@ -1,5 +1,7 @@
 import pandas as pd
+import streamlit as st
 import plotly.graph_objects as go
+import plotly.express as px
 from plotly.subplots import make_subplots
 from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.tsa.stattools import acf, pacf
@@ -221,3 +223,54 @@ def plot_autocorrelation(ts: pd.Series, index_type: str) -> go.Figure:
         font=dict(size=14),
     )
     return fig
+
+
+def plot_comparison_mode(full_data: pd.DataFrame, fips_codes: list, index_choice: str):
+    """
+    Displays a comparison view for multiple counties, including a summary table
+    and a correlation matrix.
+    """
+    st.subheader("Summary Statistics")
+
+    # 1. Prepare data for comparison
+    comparison_df = full_data[
+        (full_data["countyfips"].isin(fips_codes)) &
+        (full_data["index_type"] == index_choice)
+    ]
+
+    # Pivot the table to have counties as columns
+    pivot_df = comparison_df.pivot(
+        index='date',
+        columns='display_name',
+        values='Value'
+    )
+
+    # 2. Calculate Summary Statistics
+    summary_stats = pivot_df.describe().loc[['mean', '50%', 'max', 'min']].T
+    summary_stats.rename(columns={'50%': 'median'}, inplace=True)
+    summary_stats = summary_stats.round(2)
+
+    st.dataframe(summary_stats, use_container_width=True)
+
+    # 3. Calculate and display Correlation Matrix
+    st.subheader("Correlation Matrix")
+    st.info("This heatmap shows how similarly the drought indices for the selected counties change over time. A value of 1 means they are perfectly correlated, while a value of 0 means there is no correlation.")
+
+    if len(fips_codes) > 1:
+        correlation_matrix = pivot_df.corr()
+
+        fig = px.imshow(
+            correlation_matrix,
+            text_auto=True,
+            aspect="auto",
+            labels=dict(color="Correlation"),
+            x=correlation_matrix.columns,
+            y=correlation_matrix.columns,
+            color_continuous_scale='RdBu_r',
+            zmin=-1,
+            zmax=1
+        )
+        fig.update_layout(title=f"Correlation of {index_choice} Between Counties")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("At least two counties must be selected to display a correlation matrix.")
