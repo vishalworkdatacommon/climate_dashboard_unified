@@ -7,24 +7,37 @@ import os
 import subprocess
 import toml
 
-# --- Theme Configuration ---
+# --- Smart Theme Configuration ---
 # This must be the first Streamlit command.
-def _get_theme():
+def apply_theme_from_query_params():
+    """
+    Reads the 'theme' from the URL query parameters, loads the corresponding
+    .toml file, and overwrites the main config.toml. This is the robust
+    way to apply themes in all Streamlit environments.
+    """
     query_params = st.query_params
     theme_name = query_params.get("theme", "Light").lower()
     theme_file = f".streamlit/{theme_name}.toml"
+    
     try:
-        config = toml.load(theme_file)
-        return config.get("theme")
+        with open(theme_file, "r") as f:
+            theme_config = f.read()
+        with open(".streamlit/config.toml", "w") as f:
+            f.write(theme_config)
     except FileNotFoundError:
-        return None
+        # Default to light theme if the file is not found
+        with open(".streamlit/light.toml", "r") as f:
+            theme_config = f.read()
+        with open(".streamlit/config.toml", "w") as f:
+            f.write(theme_config)
+
+apply_theme_from_query_params()
 
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded",
-    theme=_get_theme()
+    initial_sidebar_state="expanded"
 )
 
 # --- Custom Modules ---
@@ -99,7 +112,7 @@ def main() -> None:
         
         def on_theme_change():
             new_theme = st.session_state.theme_selectbox
-            st.rerun(query_params={"theme": new_theme})
+            st.query_params["theme"] = new_theme
 
         st.selectbox(
             "Select Theme:",
