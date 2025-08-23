@@ -44,9 +44,18 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
     with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
         all_data = []
-        where_clause = " OR ".join([f"countyfips='{fips}'" for fips in county_fips_list])
+        
+        # Define the correct FIPS column name for each dataset
+        fips_col_mapping = {
+            "SPEI": "fips",
+            "SPI": "countyfips",
+            "PDSI": "countyfips"
+        }
 
         for index_type, base_url in DATA_URLS.items():
+            fips_col = fips_col_mapping[index_type]
+            where_clause = " OR ".join([f"{fips_col}='{fips}'" for fips in county_fips_list])
+            
             params = {
                 "$limit": 10000000,
                 "$where": where_clause
@@ -60,8 +69,11 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
                 df["month"] = df["month"].map("{:02}".format)
                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
-                if "fips" in df.columns:
+                
+                # Standardize the FIPS column to 'countyfips'
+                if "fips" in df.columns and "countyfips" not in df.columns:
                     df.rename(columns={"fips": "countyfips"}, inplace=True)
+                
                 df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
 
                 value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
