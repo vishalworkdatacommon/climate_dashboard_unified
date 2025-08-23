@@ -14,7 +14,8 @@ def _get_theme():
     theme_name = query_params.get("theme", "Light").lower()
     theme_file = f".streamlit/{theme_name}.toml"
     try:
-        return toml.load(theme_file)
+        config = toml.load(theme_file)
+        return config.get("theme")
     except FileNotFoundError:
         return None
 
