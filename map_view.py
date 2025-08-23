@@ -16,6 +16,10 @@ def create_interactive_map(gdf, data, index_type):
     ]
     merged_gdf = gdf.merge(map_data, on="countyfips", how="left")
 
+    # Convert Timestamp to string to avoid JSON serialization errors
+    if "date" in merged_gdf.columns:
+        merged_gdf["date"] = merged_gdf["date"].astype(str)
+
     # 2. Create the map
     m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
 
