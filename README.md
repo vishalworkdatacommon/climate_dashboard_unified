@@ -9,7 +9,7 @@ An interactive web application for analyzing, visualizing, and forecasting key d
 
 ---
 
-## ✨ Features
+## Features
 
 *   **Interactive Map Selector:** Explore a choropleth map of the U.S. to visualize regional drought patterns and select counties by clicking on them.
 *   **Live Data for Analysis:** While the map uses a fast, pre-built dataset, all detailed analyses are performed on up-to-the-second data fetched live from the NOAA API.
@@ -30,7 +30,7 @@ An interactive web application for analyzing, visualizing, and forecasting key d
 *   **Performant Caching:** A smart file-based caching system makes the app highly responsive for frequently accessed counties.
 *   **Downloadable Data:** Easily download the selected data as a CSV file for offline analysis.
 
-## 📊 Data Sources
+## Data Sources
 
 Data is sourced live from **NOAA's National Centers for Environmental Information (NCEI)**. The dashboard utilizes the following indices:
 
@@ -38,7 +38,7 @@ Data is sourced live from **NOAA's National Centers for Environmental Informatio
 *   **SPI (Standardized Precipitation Index):** Compares precipitation to the long-term average.
 *   **SPEI (Standardized Precipitation-Evapotranspiration Index):** Similar to SPI, but also accounts for temperature's effect on water demand.
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 *   **Frontend:** [Streamlit](https://streamlit.io/)
 *   **Data Manipulation:** [Pandas](https://pandas.pydata.org/), [GeoPandas](https://geopandas.org/)
@@ -79,7 +79,7 @@ To run the dashboard on your local machine, follow these steps:
     streamlit run app.py
     ```
 
-## 📂 Project Structure
+## Project Structure
 
 ```
 .
@@ -94,7 +94,7 @@ To run the dashboard on your local machine, follow these steps:
 └── cache/                   # Directory for cached data files (gitignored)
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a pull request or open an issue to discuss potential changes.
 
@@ -105,6 +105,6 @@ Contributions are welcome! Please feel free to submit a pull request or open an 
 5.  Push to the branch (`git push origin feature/YourFeature`).
 6.  Open a pull request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
