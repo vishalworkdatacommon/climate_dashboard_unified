@@ -1,3 +1,14 @@
+---
+title: U.S. County-Level Climate Dashboard
+emoji: 🌦️
+colorFrom: blue
+colorTo: green
+sdk: streamlit
+sdk_version: "1.48.1"
+app_file: app.py
+pinned: false
+---
+
 # U.S. County-Level Climate Dashboard
 
 ![Update Climate Data](https://github.com/vishalworkdatacommon/climate_dashboard_unified/actions/workflows/update_climate_data.yml/badge.svg)
