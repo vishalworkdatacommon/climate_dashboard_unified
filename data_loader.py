@@ -9,8 +9,38 @@ import time
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
 
+PARQUET_PATH = "climate_indices.parquet"
 
+@st.cache_data()
+def get_prebuilt_data_for_map() -> pd.DataFrame:
+    """
+    Loads pre-built climate data from the local Parquet file for the map.
+    """
+    if not os.path.exists(PARQUET_PATH):
+        st.error(f"Fatal Error: The map data file ({PARQUET_PATH}) was not found. Please run the build_data.py script to generate it.")
+        return pd.DataFrame()
+    
+    try:
+        df = pd.read_parquet(PARQUET_PATH)
+        # Merge with FIPS data to get display names
+        fips_df = pd.read_csv(FIPS_PATH, dtype=str)
+        fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
+        fips_df["county_fips"] = fips_df["county_fips"].str.zfill(3)
+        fips_df["countyfips"] = fips_df["state_fips"] + fips_df["county_fips"]
+        fips_df.rename(columns={"county": "county_name"}, inplace=True)
 
+        df = pd.merge(
+            df,
+            fips_df[["countyfips", "county_name", "state"]],
+            on="countyfips",
+            how="left",
+        )
+        df.dropna(subset=["county_name", "state"], inplace=True)
+        df["display_name"] = df["county_name"] + ", " + df["state"]
+        return df
+    except Exception as e:
+        st.error(f"Failed to load or process the Parquet data file for the map. Error: {e}")
+        return pd.DataFrame()
 
 @st.cache_data()
 def get_county_options() -> pd.Series:

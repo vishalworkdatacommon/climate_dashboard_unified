@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 
 # --- Custom Modules ---
-from data_loader import get_county_options, get_live_data_for_counties, get_geojson
+from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_prebuilt_data_for_map
 from plotting import (
     plot_trend_analysis,
     plot_anomaly_detection,
@@ -79,12 +79,12 @@ def main() -> None:
     # --- Interactive Map ---
     show_map = st.checkbox("Show Interactive Map Selector")
     if show_map and gdf is not None:
-        # Fetch data for ALL counties for the map choropleth
-        with st.spinner("Loading map data... This may take a moment."):
-            all_county_data = get_live_data_for_counties(fips_options.index.tolist())
+        # Use the fast, pre-built data for the map's choropleth
+        with st.spinner("Loading map data..."):
+            map_data = get_prebuilt_data_for_map()
         
-        if not all_county_data.empty:
-            last_clicked_fips = create_interactive_map(gdf, all_county_data, index_choice)
+        if not map_data.empty:
+            last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
             if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(last_clicked_fips)
                 st.rerun() # Rerun to update the multiselect widget

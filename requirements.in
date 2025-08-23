@@ -1,13 +1,11 @@
+-i https://pypi.org/simple
+--constraint packages.txt
+
 streamlit
 pandas
-matplotlib
-statsmodels
-pyarrow
-plotly
-pmdarima==2.0.4
-prophet
-folium
 geopandas
-streamlit-folium
+plotly
 scikit-learn
-pandera>=0.15.0
+statsmodels
+prophet
+requests

@@ -127,3 +127,9 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 cache/
+
+# Ignore generated data files
+climate_indices.parquet
+
+# Ignore screenshots
+*.png
