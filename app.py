@@ -21,7 +21,7 @@ from ml_models import (
 # --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
-    page_icon="💧",
+    page_icon=None,
     layout="wide",
 )
 
@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore")
 
 
 def main() -> None:
-    st.title("💧 U.S. County-Level Drought Analysis")
+    st.title("U.S. County-Level Drought Analysis")
     st.markdown(
         "Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA."
     )
