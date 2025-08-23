@@ -130,9 +130,6 @@ def main() -> None:
         st.warning("Please select at least one county from the sidebar to begin.")
         st.stop()
 
-    selected_county_names = [
-        fips_options.loc[fips]["display_name"] for fips in fips_code_inputs
-    ]
     st.header(f"{analysis_choice}: {index_choice}")
     st.markdown(f"**Displaying data for:** `{', '.join(selected_county_names)}`")
 
