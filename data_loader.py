@@ -4,6 +4,7 @@ import geopandas as gpd
 import os
 from datetime import datetime
 import traceback
+from urllib.error import HTTPError
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema, fips_data_schema
 
@@ -52,6 +53,9 @@ def get_live_data() -> Tuple[
                 cols_to_keep = ["date", "countyfips", "Value", "index_type"]
                 if all(col in df.columns for col in cols_to_keep):
                     all_data.append(df[cols_to_keep])
+            except HTTPError as e:
+                st.error(f"Failed to download data for {index_type} due to a server error ({e.code}). The data source may be temporarily unavailable. Please try again later.")
+                continue
             except Exception:
                 st.error(f"Failed to load or process data for {index_type}.")
                 st.code(traceback.format_exc())
