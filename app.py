@@ -43,38 +43,6 @@ warnings.filterwarnings("ignore")
 def main() -> None:
     """Main function to run the Streamlit dashboard."""
     
-    # --- Definitive State Management for Map Clicks ---
-    # This block runs on every rerun and is the key to the fix.
-    # It correctly updates the main selection list if a map click occurred.
-    if st.session_state.last_clicked_fips:
-        # Add the last clicked county to the list if it's not already there.
-        if st.session_state.last_clicked_fips not in st.session_state.selected_fips:
-            st.session_state.selected_fips.append(st.session_state.last_clicked_fips)
-        # Reset the click state so this only runs once per click.
-        st.session_state.last_clicked_fips = None
-
-    # --- Theme Selection Logic ---
-    current_theme = st.query_params.get("theme", "Light")
-    st.sidebar.header("Dashboard Controls")
-    
-    theme_options = ["Light", "Dark"]
-    try:
-        current_theme_index = theme_options.index(current_theme)
-    except ValueError:
-        current_theme_index = 0
-
-    selected_theme = st.sidebar.selectbox(
-        "Select Theme:",
-        theme_options,
-        index=current_theme_index,
-        key="theme_selectbox",
-    )
-
-    if selected_theme != current_theme:
-        st.query_params["theme"] = selected_theme
-        st.rerun()
-
-    # --- Main App ---
     st.title("U.S. County-Level Drought Analysis")
     st.markdown("Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA.")
 
@@ -82,8 +50,29 @@ def main() -> None:
     fips_options = get_county_options()
     gdf = get_geojson()
 
-    # --- Sidebar Controls (Continued) ---
+    # --- Sidebar Controls ---
     with st.sidebar:
+        st.header("Dashboard Controls")
+        
+        # --- Theme Selection ---
+        current_theme = st.query_params.get("theme", "Light")
+        theme_options = ["Light", "Dark"]
+        try:
+            current_theme_index = theme_options.index(current_theme)
+        except ValueError:
+            current_theme_index = 0
+
+        selected_theme = st.selectbox(
+            "Select Theme:",
+            theme_options,
+            index=current_theme_index,
+            key="theme_selectbox",
+        )
+
+        if selected_theme != current_theme:
+            st.query_params["theme"] = selected_theme
+            st.rerun()
+
         st.info(f"Data is fetched live. Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
         if fips_options.empty:
@@ -92,7 +81,12 @@ def main() -> None:
 
         index_choice = st.selectbox("1. Select Climate Index:", ["PDSI", "SPI", "SPEI"], key="index_selectbox")
 
-        # The multiselect now correctly defaults to the updated session state.
+        # --- State Management for Map Clicks ---
+        if st.session_state.last_clicked_fips:
+            if st.session_state.last_clicked_fips not in st.session_state.selected_fips:
+                st.session_state.selected_fips.append(st.session_state.last_clicked_fips)
+            st.session_state.last_clicked_fips = None
+
         fips_code_inputs = st.multiselect(
             "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
@@ -101,7 +95,6 @@ def main() -> None:
             help="You can type to search, select multiple counties, or click on the map.",
             default=st.session_state.selected_fips
         )
-        # User interaction with the multiselect updates the state.
         st.session_state.selected_fips = fips_code_inputs
         
         analysis_choice = None
@@ -111,9 +104,7 @@ def main() -> None:
 
         st.divider()
         if st.button("Clear Cache and Rerun"):
-            # Clear Streamlit's internal cache
             st.cache_data.clear()
-            # Clear our manual file cache
             cache_dir = "cache"
             if os.path.exists(cache_dir):
                 for filename in os.listdir(cache_dir):
@@ -135,7 +126,6 @@ def main() -> None:
         
         if not map_data.empty:
             clicked_fips = create_interactive_map(gdf, map_data, index_choice)
-            # If a county is clicked, we store it in our dedicated state variable and rerun.
             if clicked_fips and clicked_fips != st.session_state.last_clicked_fips:
                 st.session_state.last_clicked_fips = clicked_fips
                 st.rerun()
