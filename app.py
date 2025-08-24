@@ -85,26 +85,23 @@ def main() -> None:
         
         # --- Theme Selection ---
         theme_options = ["Light", "Dark"]
-        
-        # Get current theme from query params, default to "Light"
         current_theme = st.query_params.get("theme", ["Light"])[0]
         try:
             current_theme_index = theme_options.index(current_theme)
         except ValueError:
-            current_theme_index = 0  # Default to Light if theme is invalid
+            current_theme_index = 0  # Default to Light
 
-        def on_theme_change():
-            new_theme = st.session_state.theme_selectbox
-            st.query_params["theme"] = new_theme
-            st.rerun()
-        
-        st.selectbox(
+        selected_theme = st.selectbox(
             "Select Theme:",
             theme_options,
             index=current_theme_index,
             key="theme_selectbox",
-            on_change=on_theme_change,
         )
+
+        # If the selected theme is different from the one in the URL, update the URL and rerun.
+        if selected_theme != current_theme:
+            st.query_params["theme"] = selected_theme
+            st.rerun()
         
         analysis_choice = None
         if len(fips_code_inputs) > 1:
