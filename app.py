@@ -107,6 +107,8 @@ def main() -> None:
             last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
             if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(last_clicked_fips)
+                # Ensure the list is unique
+                st.session_state.selected_fips = list(set(st.session_state.selected_fips))
                 st.rerun()
 
     if not fips_code_inputs:
