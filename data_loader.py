@@ -3,7 +3,6 @@ import pandas as pd
 import geopandas as gpd
 import os
 import requests
-from io import StringIO
 import hashlib
 import time
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
@@ -32,8 +31,6 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         st.error(f"No data URL configured for index type: {index_type}")
         return pd.DataFrame()
 
-    # Socrata API allows ordering and limiting to get the latest data efficiently.
-    # We get the most recent year and month available.
     query = "$order=year DESC, month DESC&$limit=1"
     try:
         response = requests.get(f"{base_url}?{query}")
@@ -46,14 +43,13 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         latest_year = latest_entry[0]['year']
         latest_month = latest_entry[0]['month']
 
-        # Now fetch all records for that latest year and month
         where_clause = f"year={latest_year} AND month={latest_month}"
-        params = {"$limit": 10000, "$where": where_clause} # 10000 should be enough for all counties
+        params = {"$limit": 10000, "$where": where_clause}
         
         response = requests.get(base_url, params=params)
         response.raise_for_status()
         
-        df = pd.read_csv(StringIO(response.text))
+        df = pd.DataFrame(response.json())
         
         # --- Data Standardization ---
         df["month"] = df["month"].map("{:02}".format)
@@ -67,14 +63,8 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
         df["index_type"] = index_type
         
-        # Merge with FIPS data to get display names
         fips_df = get_county_options(return_df=True)
-        merged_df = pd.merge(
-            df,
-            fips_df,
-            on="countyfips",
-            how="left",
-        )
+        merged_df = pd.merge(df, fips_df, on="countyfips", how="left")
         merged_df.dropna(subset=["display_name"], inplace=True)
         
         return merged_df[["date", "countyfips", "Value", "index_type", "display_name"]]
@@ -91,7 +81,6 @@ def get_map_data(index_type: str) -> pd.DataFrame:
 def get_county_options(return_df: bool = False) -> pd.Series | pd.DataFrame:
     """
     Loads FIPS data to populate the county selection dropdown.
-    Can return either a Series for the dropdown or a DataFrame for merging.
     """
     if not os.path.exists(FIPS_PATH):
         st.error(f"Fatal Error: The FIPS data file was not found at {FIPS_PATH}")
@@ -107,21 +96,16 @@ def get_county_options(return_df: bool = False) -> pd.Series | pd.DataFrame:
     if return_df:
         return fips_df[["countyfips", "display_name", "state"]]
         
-    return (
-        fips_df.sort_values("display_name")
-        .set_index("countyfips")["display_name"]
-    )
+    return fips_df.sort_values("display_name").set_index("countyfips")["display_name"]
 
 
 def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
     """
-    Fetches and processes live climate data for a specific list of counties
-    using the Socrata API. Results are cached to a local Parquet file.
+    Fetches and processes live climate data for a specific list of counties.
     """
     if not county_fips_list:
         return pd.DataFrame()
 
-    # --- Caching Logic ---
     county_fips_list.sort()
     cache_key = hashlib.md5("".join(county_fips_list).encode()).hexdigest()
     cache_file_path = os.path.join(CACHE_DIR, f"{cache_key}.parquet")
@@ -135,7 +119,6 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             except Exception as e:
                 st.warning(f"Could not read cache file. Refetching data. Error: {e}")
 
-    # --- API Fetching Logic ---
     with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
         all_data = []
         fips_col_mapping = {"SPEI": "fips", "SPI": "countyfips", "PDSI": "countyfips"}
@@ -148,7 +131,7 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             try:
                 response = requests.get(base_url, params=params)
                 response.raise_for_status()
-                df = pd.read_csv(StringIO(response.text))
+                df = pd.DataFrame(response.json())
 
                 df["month"] = df["month"].map("{:02}".format)
                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
@@ -172,14 +155,8 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
         combined_df = pd.concat(all_data, ignore_index=True)
         combined_df["date"] = pd.to_datetime(combined_df["date"])
 
-        # --- Merge and Finalize ---
         fips_df = get_county_options(return_df=True)
-        final_df = pd.merge(
-            combined_df,
-            fips_df,
-            on="countyfips",
-            how="left",
-        )
+        final_df = pd.merge(combined_df, fips_df, on="countyfips", how="left")
         final_df.dropna(subset=["display_name"], inplace=True)
 
         try:

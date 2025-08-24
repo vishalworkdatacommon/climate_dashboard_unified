@@ -6,26 +6,23 @@ from datetime import datetime
 import os
 import time
 
-# --- Theme Setup ---
-def set_theme():
-    """Sets the theme based on query parameters."""
-    try:
-        theme = st.query_params.get("theme", ["Light"])[0]
-        if theme.lower() == "dark":
-            st.config.set_option("theme.base", "dark")
-        else:
-            st.config.set_option("theme.base", "light")
-    except Exception:
-        st.config.set_option("theme.base", "light")
-
 # --- Page Configuration ---
+# Set theme based on query params BEFORE setting page config
+try:
+    theme = st.query_params.get("theme", ["Light"])[0]
+    if theme.lower() == "dark":
+        st.config.set_option("theme.base", "dark")
+    else:
+        st.config.set_option("theme.base", "light")
+except Exception:
+    st.config.set_option("theme.base", "light")
+
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-set_theme()
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_map_data
@@ -89,7 +86,7 @@ def main() -> None:
         try:
             current_theme_index = theme_options.index(current_theme)
         except ValueError:
-            current_theme_index = 0  # Default to Light
+            current_theme_index = 0
 
         selected_theme = st.selectbox(
             "Select Theme:",
@@ -97,8 +94,7 @@ def main() -> None:
             index=current_theme_index,
             key="theme_selectbox",
         )
-
-        # If the selected theme is different from the one in the URL, update the URL and rerun.
+        
         if selected_theme != current_theme:
             st.query_params["theme"] = selected_theme
             st.rerun()
