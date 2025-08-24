@@ -32,8 +32,10 @@ from ml_models import (
 from map_view import create_interactive_map
 
 # --- Session State Initialization ---
+# This is the definitive initialization logic.
 if 'selected_fips' not in st.session_state:
-    st.session_state.selected_fips = []
+    # Default to a valid county on first run to prevent empty state errors.
+    st.session_state.selected_fips = ['01001']  # Autauga County, AL
 if 'last_clicked_fips' not in st.session_state:
     st.session_state.last_clicked_fips = None
 
