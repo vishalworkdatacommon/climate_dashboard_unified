@@ -96,6 +96,7 @@ def main() -> None:
         def on_theme_change():
             new_theme = st.session_state.theme_selectbox
             st.query_params["theme"] = new_theme
+            st.rerun()
         
         st.selectbox(
             "Select Theme:",
