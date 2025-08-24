@@ -6,43 +6,6 @@ from datetime import datetime
 import os
 import time
 
-# --- Theme Definitions ---
-# By defining theme content here, we avoid file I/O errors.
-LIGHT_THEME_CONFIG = """
-[theme]
-primaryColor="#0068c9"
-backgroundColor="#ffffff"
-secondaryBackgroundColor="#f5f5f5"
-textColor="#262730"
-font="sans serif"
-"""
-
-DARK_THEME_CONFIG = """
-[theme]
-primaryColor="#00a0dc"
-backgroundColor="#0e1117"
-secondaryBackgroundColor="#262730"
-textColor="#fafafa"
-font="sans serif"
-"""
-
-def apply_and_set_theme(theme_name: str):
-    """
-    Writes the selected theme to .streamlit/config.toml to apply it,
-    updates the URL query parameter, and stores it in session state.
-    This is the definitive method to ensure immediate theme changes.
-    """
-    theme_content = LIGHT_THEME_CONFIG if theme_name == "Light" else DARK_THEME_CONFIG
-    config_path = os.path.join(".streamlit", "config.toml")
-    try:
-        with open(config_path, "w") as f:
-            f.write(theme_content)
-        # Update the session state and query params to keep track of the current theme
-        st.session_state.theme = theme_name
-        st.query_params["theme"] = theme_name
-    except Exception as e:
-        st.error(f"Failed to apply theme: {e}")
-
 # --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
@@ -50,14 +13,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# --- Initial Theme Application ---
-# Apply the theme from the URL query param on the very first run.
-if 'theme' not in st.session_state:
-    initial_theme = st.query_params.get("theme", ["Light"])[0]
-    apply_and_set_theme(initial_theme)
-    st.session_state.initial_theme_applied = True
-    st.rerun()
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_map_data
@@ -85,6 +40,31 @@ warnings.filterwarnings("ignore")
 
 def main() -> None:
     """Main function to run the Streamlit dashboard."""
+    
+    # --- Theme Selection Logic ---
+    # This is the definitive, simplified logic for theme handling.
+    current_theme = st.query_params.get("theme", "Light")
+    st.sidebar.header("Dashboard Controls")
+    
+    theme_options = ["Light", "Dark"]
+    try:
+        current_theme_index = theme_options.index(current_theme)
+    except ValueError:
+        current_theme_index = 0 # Default to Light
+
+    selected_theme = st.sidebar.selectbox(
+        "Select Theme:",
+        theme_options,
+        index=current_theme_index,
+        key="theme_selectbox",
+    )
+
+    # If the selection changes, update the query param and rerun.
+    if selected_theme != current_theme:
+        st.query_params["theme"] = selected_theme
+        st.rerun()
+
+    # --- Main App ---
     st.title("U.S. County-Level Drought Analysis")
     st.markdown("Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA.")
 
@@ -92,9 +72,8 @@ def main() -> None:
     fips_options = get_county_options()
     gdf = get_geojson()
 
-    # --- Sidebar Controls ---
+    # --- Sidebar Controls (Continued) ---
     with st.sidebar:
-        st.header("Dashboard Controls")
         st.info(f"Data is fetched live. Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC")
 
         if fips_options.empty:
@@ -112,26 +91,6 @@ def main() -> None:
             default=st.session_state.get('selected_fips', [])
         )
         st.session_state.selected_fips = fips_code_inputs
-
-        st.divider()
-        
-        # --- Theme Selection ---
-        theme_options = ["Light", "Dark"]
-        try:
-            current_theme_index = theme_options.index(st.session_state.get("theme", "Light"))
-        except ValueError:
-            current_theme_index = 0
-
-        selected_theme = st.selectbox(
-            "Select Theme:",
-            theme_options,
-            index=current_theme_index,
-            key="theme_selectbox",
-        )
-        
-        if selected_theme != st.session_state.get("theme"):
-            apply_and_set_theme(selected_theme)
-            st.rerun()
         
         analysis_choice = None
         if len(fips_code_inputs) > 1:
@@ -227,7 +186,7 @@ def main() -> None:
                         fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
                     elif analysis_choice == "Anomaly Detection":
                         rolling_mean = time_series.rolling(window=12).mean()
-                        rolling_std = time_series.rolling(window=12).std()
+                        rolling__std = time_series.rolling(window=12).std()
                         anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
                         fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
                         fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode="markers", name=f"{county_name} Anomaly", marker=dict(symbol="x")))
