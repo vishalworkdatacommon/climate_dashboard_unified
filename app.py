@@ -34,6 +34,8 @@ from map_view import create_interactive_map
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = []
+if 'last_clicked_fips' not in st.session_state:
+    st.session_state.last_clicked_fips = None
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
@@ -41,8 +43,17 @@ warnings.filterwarnings("ignore")
 def main() -> None:
     """Main function to run the Streamlit dashboard."""
     
+    # --- Definitive State Management for Map Clicks ---
+    # This block runs on every rerun and is the key to the fix.
+    # It correctly updates the main selection list if a map click occurred.
+    if st.session_state.last_clicked_fips:
+        # Add the last clicked county to the list if it's not already there.
+        if st.session_state.last_clicked_fips not in st.session_state.selected_fips:
+            st.session_state.selected_fips.append(st.session_state.last_clicked_fips)
+        # Reset the click state so this only runs once per click.
+        st.session_state.last_clicked_fips = None
+
     # --- Theme Selection Logic ---
-    # This is the definitive, simplified logic for theme handling.
     current_theme = st.query_params.get("theme", "Light")
     st.sidebar.header("Dashboard Controls")
     
@@ -50,7 +61,7 @@ def main() -> None:
     try:
         current_theme_index = theme_options.index(current_theme)
     except ValueError:
-        current_theme_index = 0 # Default to Light
+        current_theme_index = 0
 
     selected_theme = st.sidebar.selectbox(
         "Select Theme:",
@@ -59,7 +70,6 @@ def main() -> None:
         key="theme_selectbox",
     )
 
-    # If the selection changes, update the query param and rerun.
     if selected_theme != current_theme:
         st.query_params["theme"] = selected_theme
         st.rerun()
@@ -82,14 +92,16 @@ def main() -> None:
 
         index_choice = st.selectbox("1. Select Climate Index:", ["PDSI", "SPI", "SPEI"], key="index_selectbox")
 
+        # The multiselect now correctly defaults to the updated session state.
         fips_code_inputs = st.multiselect(
             "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
             format_func=lambda x: fips_options.get(x, "Unknown County"),
             key="fips_multiselect",
             help="You can type to search, select multiple counties, or click on the map.",
-            default=st.session_state.get('selected_fips', [])
+            default=st.session_state.selected_fips
         )
+        # User interaction with the multiselect updates the state.
         st.session_state.selected_fips = fips_code_inputs
         
         analysis_choice = None
@@ -104,11 +116,10 @@ def main() -> None:
             map_data = get_map_data(index_choice)
         
         if not map_data.empty:
-            last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
-            if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
-                st.session_state.selected_fips.append(last_clicked_fips)
-                # Ensure the list is unique
-                st.session_state.selected_fips = list(set(st.session_state.selected_fips))
+            clicked_fips = create_interactive_map(gdf, map_data, index_choice)
+            # If a county is clicked, we store it in our dedicated state variable and rerun.
+            if clicked_fips and clicked_fips != st.session_state.last_clicked_fips:
+                st.session_state.last_clicked_fips = clicked_fips
                 st.rerun()
 
     if not fips_code_inputs:
@@ -188,7 +199,7 @@ def main() -> None:
                         fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
                     elif analysis_choice == "Anomaly Detection":
                         rolling_mean = time_series.rolling(window=12).mean()
-                        rolling__std = time_series.rolling(window=12).std()
+                        rolling_std = time_series.rolling(window=12).std()
                         anomalies = time_series[(time_series > rolling_mean + (2 * rolling_std)) | (time_series < rolling_mean - (2 * rolling_std))]
                         fig.add_trace(go.Scatter(x=time_series.index, y=time_series, mode="lines", name=county_name))
                         fig.add_trace(go.Scatter(x=anomalies.index, y=anomalies, mode="markers", name=f"{county_name} Anomaly", marker=dict(symbol="x")))
