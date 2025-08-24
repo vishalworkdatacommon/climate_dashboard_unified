@@ -145,7 +145,9 @@ def main() -> None:
         st.stop()
 
     # --- Data Fetching for Analysis ---
-    full_data = get_live_data_for_counties(fips_code_inputs)
+    with st.spinner(f"Fetching live data for {len(fips_code_inputs)} selected counties..."):
+        full_data = get_live_data_for_counties(fips_code_inputs)
+    
     if full_data.empty:
         st.warning("No data could be fetched for the selected counties.")
         st.stop()

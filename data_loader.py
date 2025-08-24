@@ -125,42 +125,42 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             except Exception as e:
                 st.warning(f"Could not read cache file. Refetching data. Error: {e}")
 
-    with st.spinner(f"Fetching live data for {len(county_fips_list)} selected counties..."):
-        all_data = []
-        fips_col_mapping = {"SPEI": "fips", "SPI": "countyfips", "PDSI": "countyfips"}
+    # --- API Fetching Logic ---
+    all_data = []
+    fips_col_mapping = {"SPEI": "fips", "SPI": "countyfips", "PDSI": "countyfips"}
 
-        for index_type, base_url in DATA_URLS.items():
-            fips_col = fips_col_mapping[index_type]
-            where_clause = " OR ".join([f"{fips_col}='{fips}'" for fips in county_fips_list])
-            params = {"$limit": 10000000, "$where": where_clause}
+    for index_type, base_url in DATA_URLS.items():
+        fips_col = fips_col_mapping[index_type]
+        where_clause = " OR ".join([f"{fips_col}='{fips}'" for fips in county_fips_list])
+        params = {"$limit": 10000000, "$where": where_clause}
 
-            try:
-                response = requests.get(base_url, params=params)
-                response.raise_for_status()
-                df = pd.DataFrame(response.json())
+        try:
+            response = requests.get(base_url, params=params)
+            response.raise_for_status()
+            df = pd.DataFrame(response.json())
 
-                df["month"] = df["month"].map("{:02}".format)
-                df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
-                if "fips" in df.columns and "countyfips" not in df.columns:
-                    df.rename(columns={"fips": "countyfips"}, inplace=True)
-                df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
+            df["month"] = df["month"].map("{:02}".format)
+            df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+            if "fips" in df.columns and "countyfips" not in df.columns:
+                df.rename(columns={"fips": "countyfips"}, inplace=True)
+            df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
 
-                value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
-                df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
-                
-                # FIX: Convert 'Value' column to numeric, coercing errors to NaN
-                df["Value"] = pd.to_numeric(df["Value"], errors='coerce')
+            value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
+            df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+            
+            # FIX: Convert 'Value' column to numeric, coercing errors to NaN
+            df["Value"] = pd.to_numeric(df["Value"], errors='coerce')
 
-                df["index_type"] = index_type
-                all_data.append(df)
+            df["index_type"] = index_type
+            all_data.append(df)
 
-            except requests.exceptions.RequestException as e:
-                st.error(f"Failed to download {index_type} data: {e}")
-                continue
-        
-        if not all_data:
-            st.warning("Could not load any climate data for the selected counties.")
-            return pd.DataFrame()
+        except requests.exceptions.RequestException as e:
+            st.error(f"Failed to download {index_type} data: {e}")
+            continue
+    
+    if not all_data:
+        st.warning("Could not load any climate data for the selected counties.")
+        return pd.DataFrame()
 
         combined_df = pd.concat(all_data, ignore_index=True)
         
