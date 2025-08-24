@@ -43,7 +43,8 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         latest_year = latest_entry[0]['year']
         latest_month = latest_entry[0]['month']
 
-        where_clause = f"year={latest_year} AND month={latest_month}"
+        # Socrata API requires string values in a $where clause to be single-quoted
+        where_clause = f"year='{latest_year}' AND month='{latest_month}'"
         params = {"$limit": 10000, "$where": where_clause}
         
         response = requests.get(base_url, params=params)
