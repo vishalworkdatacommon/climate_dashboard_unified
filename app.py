@@ -32,10 +32,8 @@ from ml_models import (
 from map_view import create_interactive_map
 
 # --- Session State Initialization ---
-# This is the definitive initialization logic.
 if 'selected_fips' not in st.session_state:
-    # Default to a valid county on first run to prevent empty state errors.
-    st.session_state.selected_fips = ['01001']  # Autauga County, AL
+    st.session_state.selected_fips = ['01001']  # Default to Autauga County, AL
 if 'last_clicked_fips' not in st.session_state:
     st.session_state.last_clicked_fips = None
 
@@ -83,7 +81,8 @@ def main() -> None:
 
         index_choice = st.selectbox("1. Select Climate Index:", ["PDSI", "SPI", "SPEI"], key="index_selectbox")
 
-        # --- State Management for Map Clicks ---
+        # --- Definitive State Management for Map Clicks ---
+        # This logic now runs inside the sidebar, right before the multiselect is rendered.
         if st.session_state.last_clicked_fips:
             if st.session_state.last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(st.session_state.last_clicked_fips)
