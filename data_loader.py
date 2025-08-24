@@ -5,6 +5,7 @@ import os
 import requests
 import hashlib
 import time
+import urllib.parse
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
 
@@ -43,11 +44,12 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         latest_year = latest_entry[0]['year']
         latest_month = latest_entry[0]['month']
 
-        # Socrata API requires string values in a $where clause to be single-quoted
+        # FIX: Manually build and encode the URL to ensure quotes are preserved.
         where_clause = f"year='{latest_year}' AND month='{latest_month}'"
-        params = {"$limit": 10000, "$where": where_clause}
+        encoded_where = urllib.parse.quote(where_clause)
+        full_url = f"{base_url}?$limit=10000&$where={encoded_where}"
         
-        response = requests.get(base_url, params=params)
+        response = requests.get(full_url)
         response.raise_for_status()
         
         df = pd.DataFrame(response.json())
@@ -154,7 +156,10 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             return pd.DataFrame()
 
         combined_df = pd.concat(all_data, ignore_index=True)
-        combined_df["date"] = pd.to_datetime(combined_df["date"])
+        
+        # FIX: Add robust date parsing to handle potential malformed date strings.
+        combined_df["date"] = pd.to_datetime(combined_df["date"], format="%Y-%m", errors='coerce')
+        combined_df.dropna(subset=["date"], inplace=True)
 
         fips_df = get_county_options(return_df=True)
         final_df = pd.merge(combined_df, fips_df, on="countyfips", how="left")
