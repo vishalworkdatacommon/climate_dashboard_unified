@@ -4,22 +4,18 @@ import warnings
 import plotly.graph_objects as go
 from datetime import datetime
 import os
-import subprocess
-import toml
 import time
 
-
-
-
+# --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
-    page_icon=None,
+    page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # --- Custom Modules ---
-from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_prebuilt_data_for_map
+from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_map_data
 from plotting import (
     plot_trend_analysis,
     plot_anomaly_detection,
@@ -35,27 +31,6 @@ from ml_models import (
 )
 from map_view import create_interactive_map
 
-# --- Initial Setup: Smartly handle pre-built data ---
-PARQUET_PATH = "climate_indices.parquet"
-if not os.path.exists(PARQUET_PATH):
-    if 'build_process_running' not in st.session_state:
-        st.session_state.build_process_running = True
-        try:
-            # Start the build process in the background
-            subprocess.Popen(["python3", "build_data.py"])
-        except Exception as e:
-            st.error(f"Failed to start the data build process: {e}")
-            st.session_state.build_process_running = False
-    
-    # Show a placeholder and auto-refresh using a meta tag
-    st.info("Map data is being prepared in the background. The dashboard will automatically refresh when it's ready.")
-    st.markdown('<meta http-equiv="refresh" content="15">', unsafe_allow_html=True)
-    st.stop()
-else:
-    # If the file exists and the flag is still in session_state, it means the build just finished.
-    if 'build_process_running' in st.session_state:
-        del st.session_state['build_process_running']
-
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = []
@@ -64,12 +39,15 @@ if 'selected_fips' not in st.session_state:
 warnings.filterwarnings("ignore")
 
 def main() -> None:
+    """Main function to run the Streamlit dashboard."""
     st.title("U.S. County-Level Drought Analysis")
     st.markdown("Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA.")
 
+    # --- Data Loading ---
     fips_options = get_county_options()
     gdf = get_geojson()
 
+    # --- Sidebar Controls ---
     with st.sidebar:
         st.header("Dashboard Controls")
         st.info(f"Data is fetched live. Last refresh: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} UTC")
@@ -86,25 +64,27 @@ def main() -> None:
             format_func=lambda x: fips_options.get(x, "Unknown County"),
             key="fips_multiselect",
             help="You can type to search, select multiple counties, or click on the map.",
-            default=st.session_state.selected_fips
+            default=st.session_state.get('selected_fips', [])
         )
         st.session_state.selected_fips = fips_code_inputs
 
         st.divider()
         
+        # --- Theme Selection ---
         theme_options = ["Light", "Dark"]
-        current_theme = st.query_params.get("theme", "Light")
-        
+        try:
+            current_theme_index = theme_options.index(st.query_params.get("theme", "Light"))
+        except ValueError:
+            current_theme_index = 0 # Default to Light
+
         def on_theme_change():
             new_theme = st.session_state.theme_selectbox
-            st.query_params["theme"] = new_theme
-            # No need to call apply_theme, Streamlit handles it
-            st.rerun()
-
+            st.query_params.theme = new_theme
+        
         st.selectbox(
             "Select Theme:",
             theme_options,
-            index=theme_options.index(current_theme) if current_theme in theme_options else 0,
+            index=current_theme_index,
             key="theme_selectbox",
             on_change=on_theme_change,
         )
@@ -115,23 +95,13 @@ def main() -> None:
             analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
     # --- Interactive Map Section ---
-    # Provides a checkbox to toggle the map's visibility, reducing clutter.
     show_map = st.checkbox("Show Interactive Map Selector", value=True)
     if show_map and gdf is not None:
-        # Display a spinner while the map data is being loaded.
         with st.spinner("Loading map data..."):
-            # Caching the map data prevents reloading on every interaction.
-            @st.cache_data
-            def cached_get_prebuilt_data():
-                return get_prebuilt_data_for_map()
-            
-            map_data = cached_get_prebuilt_data()
+            map_data = get_map_data(index_choice)
         
-        # Render the map if data is available.
         if not map_data.empty:
             last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
-            
-            # If a county is clicked, add it to the selection and rerun the app.
             if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(last_clicked_fips)
                 st.rerun()

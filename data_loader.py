@@ -9,48 +9,93 @@ import time
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
 
-PARQUET_PATH = "climate_indices.parquet"
+# --- Constants ---
+CACHE_DIR = "cache"
+CACHE_EXPIRATION_SECONDS = 24 * 60 * 60  # 24 hours
 
-@st.cache_data()
-def get_prebuilt_data_for_map() -> pd.DataFrame:
+# --- Helper Functions ---
+
+def initialize_cache():
+    """Ensures the cache directory exists."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+initialize_cache()
+
+@st.cache_data(ttl=CACHE_EXPIRATION_SECONDS)
+def get_map_data(index_type: str) -> pd.DataFrame:
     """
-    Loads pre-built climate data from the local Parquet file for the map.
+    Fetches the latest month's data for a given index type for all counties.
+    This is used to populate the main interactive map.
     """
-    if not os.path.exists(PARQUET_PATH):
-        st.error(f"Fatal Error: The map data file ({PARQUET_PATH}) was not found. Please run the build_data.py script to generate it.")
+    base_url = DATA_URLS.get(index_type)
+    if not base_url:
+        st.error(f"No data URL configured for index type: {index_type}")
         return pd.DataFrame()
-    
-    try:
-        df = pd.read_parquet(PARQUET_PATH)
-        # Merge with FIPS data to get display names
-        fips_df = pd.read_csv(FIPS_PATH, dtype=str)
-        fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
-        fips_df["county_fips"] = fips_df["county_fips"].str.zfill(3)
-        fips_df["countyfips"] = fips_df["state_fips"] + fips_df["county_fips"]
-        fips_df.rename(columns={"county": "county_name"}, inplace=True)
 
-        df = pd.merge(
+    # Socrata API allows ordering and limiting to get the latest data efficiently.
+    # We get the most recent year and month available.
+    query = "$order=year DESC, month DESC&$limit=1"
+    try:
+        response = requests.get(f"{base_url}?{query}")
+        response.raise_for_status()
+        latest_entry = response.json()
+        if not latest_entry:
+            st.warning(f"No data available for index {index_type}")
+            return pd.DataFrame()
+        
+        latest_year = latest_entry[0]['year']
+        latest_month = latest_entry[0]['month']
+
+        # Now fetch all records for that latest year and month
+        where_clause = f"year={latest_year} AND month={latest_month}"
+        params = {"$limit": 10000, "$where": where_clause} # 10000 should be enough for all counties
+        
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        
+        df = pd.read_csv(StringIO(response.text))
+        
+        # --- Data Standardization ---
+        df["month"] = df["month"].map("{:02}".format)
+        df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+        
+        if "fips" in df.columns and "countyfips" not in df.columns:
+            df.rename(columns={"fips": "countyfips"}, inplace=True)
+        df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
+
+        value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
+        df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+        df["index_type"] = index_type
+        
+        # Merge with FIPS data to get display names
+        fips_df = get_county_options(return_df=True)
+        merged_df = pd.merge(
             df,
-            fips_df[["countyfips", "county_name", "state"]],
+            fips_df,
             on="countyfips",
             how="left",
         )
-        df.dropna(subset=["county_name", "state"], inplace=True)
-        df["display_name"] = df["county_name"] + ", " + df["state"]
-        return df
+        merged_df.dropna(subset=["display_name"], inplace=True)
+        
+        return merged_df[["date", "countyfips", "Value", "index_type", "display_name"]]
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to fetch map data for {index_type}: {e}")
+        return pd.DataFrame()
     except Exception as e:
-        st.error(f"Failed to load or process the Parquet data file for the map. Error: {e}")
+        st.error(f"An error occurred while processing map data for {index_type}: {e}")
         return pd.DataFrame()
 
+
 @st.cache_data()
-def get_county_options() -> pd.Series:
+def get_county_options(return_df: bool = False) -> pd.Series | pd.DataFrame:
     """
     Loads FIPS data to populate the county selection dropdown.
-    This is cached as it rarely changes.
+    Can return either a Series for the dropdown or a DataFrame for merging.
     """
     if not os.path.exists(FIPS_PATH):
         st.error(f"Fatal Error: The FIPS data file was not found at {FIPS_PATH}")
-        return pd.Series(dtype='str')
+        return pd.Series(dtype='str') if not return_df else pd.DataFrame()
 
     fips_df = pd.read_csv(FIPS_PATH, dtype=str)
     fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
@@ -59,32 +104,28 @@ def get_county_options() -> pd.Series:
     fips_df.rename(columns={"county": "county_name"}, inplace=True)
     fips_df["display_name"] = fips_df["county_name"] + ", " + fips_df["state"]
 
+    if return_df:
+        return fips_df[["countyfips", "display_name", "state"]]
+        
     return (
         fips_df.sort_values("display_name")
         .set_index("countyfips")["display_name"]
     )
 
 
-# @st.cache_data(ttl="1h") # We are replacing Streamlit's cache with a custom file-based cache
 def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
     """
     Fetches and processes live climate data for a specific list of counties
-    using the Socrata API. Results are cached to a local Parquet file for 24 hours.
+    using the Socrata API. Results are cached to a local Parquet file.
     """
     if not county_fips_list:
         return pd.DataFrame()
 
     # --- Caching Logic ---
-    CACHE_DIR = "cache"
-    os.makedirs(CACHE_DIR, exist_ok=True)  # Ensure the cache directory exists
-    CACHE_EXPIRATION_SECONDS = 24 * 60 * 60  # 24 hours
-
-    # Create a unique hash for the list of counties to use as a filename
     county_fips_list.sort()
     cache_key = hashlib.md5("".join(county_fips_list).encode()).hexdigest()
     cache_file_path = os.path.join(CACHE_DIR, f"{cache_key}.parquet")
 
-    # Check if a valid cache file exists
     if os.path.exists(cache_file_path):
         file_mod_time = os.path.getmtime(cache_file_path)
         if (time.time() - file_mod_time) < CACHE_EXPIRATION_SECONDS:
@@ -107,8 +148,7 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             try:
                 response = requests.get(base_url, params=params)
                 response.raise_for_status()
-                csv_data = StringIO(response.text)
-                df = pd.read_csv(csv_data)
+                df = pd.read_csv(StringIO(response.text))
 
                 df["month"] = df["month"].map("{:02}".format)
                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
@@ -119,18 +159,12 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
                 value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
                 df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
                 df["index_type"] = index_type
+                all_data.append(df)
 
-                cols_to_keep = ["date", "countyfips", "Value", "index_type"]
-                if all(col in df.columns for col in cols_to_keep):
-                    all_data.append(df[cols_to_keep])
-
-            except requests.exceptions.HTTPError as e:
-                st.error(f"Failed to download {index_type} data: Server error ({e.response.status_code}).")
+            except requests.exceptions.RequestException as e:
+                st.error(f"Failed to download {index_type} data: {e}")
                 continue
-            except Exception as e:
-                st.error(f"Failed to process data for {index_type}. Error: {e}")
-                continue
-
+        
         if not all_data:
             st.warning("Could not load any climate data for the selected counties.")
             return pd.DataFrame()
@@ -139,24 +173,17 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
         combined_df["date"] = pd.to_datetime(combined_df["date"])
 
         # --- Merge and Finalize ---
-        fips_df = pd.read_csv(FIPS_PATH, dtype=str)
-        fips_df["state_fips"] = fips_df["state_fips"].str.zfill(2)
-        fips_df["county_fips"] = fips_df["county_fips"].str.zfill(3)
-        fips_df["countyfips"] = fips_df["state_fips"] + fips_df["county_fips"]
-        fips_df.rename(columns={"county": "county_name"}, inplace=True)
-
-        df = pd.merge(
+        fips_df = get_county_options(return_df=True)
+        final_df = pd.merge(
             combined_df,
-            fips_df[["countyfips", "county_name", "state"]],
+            fips_df,
             on="countyfips",
             how="left",
         )
-        df.dropna(subset=["county_name", "state"], inplace=True)
-        df["display_name"] = df["county_name"] + ", " + df["state"]
+        final_df.dropna(subset=["display_name"], inplace=True)
 
         try:
-            validated_df = climate_data_schema.validate(df)
-            # Save to cache
+            validated_df = climate_data_schema.validate(final_df)
             validated_df.to_parquet(cache_file_path)
             return validated_df
         except Exception as e:
@@ -164,12 +191,10 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
             return pd.DataFrame()
 
 
-
 @st.cache_data()
 def get_geojson() -> gpd.GeoDataFrame | None:
     """
     Loads the GeoJSON file for county boundaries.
-    Cached indefinitely as it's a static file.
     """
     if not os.path.exists(GEOJSON_PATH):
         st.error(f"Fatal Error: The GeoJSON file was not found at {GEOJSON_PATH}")
