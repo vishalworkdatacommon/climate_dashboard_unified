@@ -109,6 +109,24 @@ def main() -> None:
             analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
             analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
+        st.divider()
+        if st.button("Clear Cache and Rerun"):
+            # Clear Streamlit's internal cache
+            st.cache_data.clear()
+            # Clear our manual file cache
+            cache_dir = "cache"
+            if os.path.exists(cache_dir):
+                for filename in os.listdir(cache_dir):
+                    file_path = os.path.join(cache_dir, filename)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.unlink(file_path)
+                    except Exception as e:
+                        st.error(f"Failed to delete {file_path}. Reason: {e}")
+            st.success("Cache cleared. Rerunning...")
+            time.sleep(1)
+            st.rerun()
+
     # --- Interactive Map Section ---
     show_map = st.checkbox("Show Interactive Map Selector", value=True)
     if show_map and gdf is not None:
