@@ -8,23 +8,8 @@ import subprocess
 import toml
 import time
 
-# --- Smart Theme Configuration ---
-def apply_theme_from_query_params():
-    query_params = st.query_params
-    theme_name = query_params.get("theme", "Light").lower()
-    theme_file = f".streamlit/{theme_name}.toml"
-    try:
-        with open(theme_file, "r") as f:
-            theme_config = f.read()
-        with open(".streamlit/config.toml", "w") as f:
-            f.write(theme_config)
-    except FileNotFoundError:
-        with open(".streamlit/light.toml", "r") as f:
-            theme_config = f.read()
-        with open(".streamlit/config.toml", "w") as f:
-            f.write(theme_config)
 
-apply_theme_from_query_params()
+
 
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
@@ -56,16 +41,20 @@ if not os.path.exists(PARQUET_PATH):
     if 'build_process_running' not in st.session_state:
         st.session_state.build_process_running = True
         try:
+            # Start the build process in the background
             subprocess.Popen(["python3", "build_data.py"])
         except Exception as e:
             st.error(f"Failed to start the data build process: {e}")
             st.session_state.build_process_running = False
     
-    # Show a placeholder and auto-refresh
+    # Show a placeholder and auto-refresh using a meta tag
     st.info("Map data is being prepared in the background. The dashboard will automatically refresh when it's ready.")
-    while not os.path.exists(PARQUET_PATH):
-        time.sleep(5)
-    st.rerun()
+    st.markdown('<meta http-equiv="refresh" content="15">', unsafe_allow_html=True)
+    st.stop()
+else:
+    # If the file exists and the flag is still in session_state, it means the build just finished.
+    if 'build_process_running' in st.session_state:
+        del st.session_state['build_process_running']
 
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
@@ -103,19 +92,21 @@ def main() -> None:
 
         st.divider()
         
-        theme_options = ["Light", "Dark", "Contrast"]
+        theme_options = ["Light", "Dark"]
         current_theme = st.query_params.get("theme", "Light")
         
         def on_theme_change():
             new_theme = st.session_state.theme_selectbox
             st.query_params["theme"] = new_theme
+            # No need to call apply_theme, Streamlit handles it
+            st.rerun()
 
         st.selectbox(
             "Select Theme:",
             theme_options,
             index=theme_options.index(current_theme) if current_theme in theme_options else 0,
             key="theme_selectbox",
-            on_change=on_theme_change
+            on_change=on_theme_change,
         )
         
         analysis_choice = None
@@ -123,14 +114,24 @@ def main() -> None:
             analysis_options = ["Trend Analysis", "Anomaly Detection", "Comparison Mode"]
             analysis_choice = st.selectbox("3. Select Analysis:", analysis_options, key="analysis_selectbox")
 
-    # --- Interactive Map ---
+    # --- Interactive Map Section ---
+    # Provides a checkbox to toggle the map's visibility, reducing clutter.
     show_map = st.checkbox("Show Interactive Map Selector", value=True)
     if show_map and gdf is not None:
+        # Display a spinner while the map data is being loaded.
         with st.spinner("Loading map data..."):
-            map_data = get_prebuilt_data_for_map()
+            # Caching the map data prevents reloading on every interaction.
+            @st.cache_data
+            def cached_get_prebuilt_data():
+                return get_prebuilt_data_for_map()
+            
+            map_data = cached_get_prebuilt_data()
         
+        # Render the map if data is available.
         if not map_data.empty:
             last_clicked_fips = create_interactive_map(gdf, map_data, index_choice)
+            
+            # If a county is clicked, add it to the selection and rerun the app.
             if last_clicked_fips and last_clicked_fips not in st.session_state.selected_fips:
                 st.session_state.selected_fips.append(last_clicked_fips)
                 st.rerun()

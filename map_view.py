@@ -1,78 +1,122 @@
+
 import streamlit as st
 import pandas as pd
 import folium
+from folium.features import GeoJson, GeoJsonTooltip, GeoJsonPopup
 import branca.colormap as cm
 from streamlit_folium import st_folium
+from geopandas import GeoDataFrame
+from typing import Optional, Dict, Any
 
-def create_interactive_map(gdf, data, index_type):
+# --- Constants ---
+DEFAULT_MAP_LOCATION = [39.8283, -98.5795]
+DEFAULT_ZOOM = 4
+NO_DATA_COLOR = "#808080"
+COLOR_SCALE = ['#d7191c', '#fdae61', '#ffffbf', '#a6d96a', '#1a9641']
+COLOR_INDEX = [-3, -1.5, 0, 1.5, 3]
+
+# --- Helper Functions ---
+
+@st.cache_data
+def get_colormap(index_type: str, vmin: float = -3, vmax: float = 3) -> cm.LinearColormap:
+    """Creates and returns a branca colormap for the map legend."""
+    return cm.LinearColormap(
+        colors=COLOR_SCALE,
+        index=COLOR_INDEX,
+        vmin=vmin,
+        vmax=vmax,
+        caption=f"Value for {index_type}"
+    )
+
+def style_function(feature: Dict[str, Any], colormap: cm.LinearColormap) -> Dict[str, Any]:
+    """
+    Applies styling to a GeoJSON feature based on its 'Value' property.
+    Handles missing data by applying a default color.
+    """
+    value = feature['properties'].get('Value')
+    return {
+        'fillColor': colormap(value) if pd.notna(value) else NO_DATA_COLOR,
+        'color': 'black',
+        'weight': 0.5,
+        'fillOpacity': 0.7
+    }
+
+# --- Main Map Creation Function ---
+
+def create_interactive_map(
+    gdf: GeoDataFrame, 
+    data: pd.DataFrame, 
+    index_type: str
+) -> Optional[str]:
     """
     Creates and displays an interactive Folium map with a choropleth layer.
-    Returns the FIPS code of the last clicked county.
+
+    Args:
+        gdf: A GeoDataFrame containing county geometries and FIPS codes.
+        data: A DataFrame with the time-series data for the selected index.
+        index_type: The climate index being displayed (e.g., "PDSI").
+
+    Returns:
+        The FIPS code of the last clicked county, or None if no county was clicked.
     """
-    # 1. Prepare the data for the map
+    # 1. Prepare data for the map
+    if data.empty:
+        st.warning("No data available to display on the map.")
+        return None
+        
     latest_date = data['date'].max()
     map_data = data[
         (data["index_type"] == index_type) & (data["date"] == latest_date)
     ]
+    
+    # Ensure 'date' column is in a JSON-serializable format
+    if "date" in map_data.columns:
+        map_data["date"] = map_data["date"].astype(str)
+
     merged_gdf = gdf.merge(map_data, on="countyfips", how="left")
 
-    # Convert Timestamp to string to avoid JSON serialization errors
-    if "date" in merged_gdf.columns:
-        merged_gdf["date"] = merged_gdf["date"].astype(str)
-
-    # 2. Create the map
-    m = folium.Map(location=[39.8283, -98.5795], zoom_start=4)
-
-    # 3. Create a colormap
-    colormap = cm.LinearColormap(
-        colors=['#d7191c', '#fdae61', '#ffffbf', '#a6d96a', '#1a9641'],
-        index=[-3, -1.5, 0, 1.5, 3],
-        vmin=-3, vmax=3,
-        caption=f"{index_type} Value"
-    )
+    # 2. Create the base map
+    m = folium.Map(location=DEFAULT_MAP_LOCATION, zoom_start=DEFAULT_ZOOM)
+    
+    # 3. Create and add the colormap legend
+    colormap = get_colormap(index_type)
     m.add_child(colormap)
 
-    # 4. Add the choropleth layer
-    choropleth = folium.Choropleth(
-        geo_data=merged_gdf,
-        data=merged_gdf,
-        columns=["countyfips", "Value"],
-        key_on="feature.properties.countyfips",
-        fill_color="YlOrRd", # This will be overridden by the GeoJson style function
-        fill_opacity=0.7,
-        line_opacity=0.2,
-        legend_name=f"{index_type} Value",
-        highlight=True,
-    ).add_to(m)
+    # 4. Create and add the GeoJson layer with tooltips and popups
+    tooltip = GeoJsonTooltip(
+        fields=["display_name", "Value", "date"],
+        aliases=["County:", f"{index_type} Value:", "Date:"],
+        localize=True,
+        sticky=False,
+        style="""
+            background-color: #F0EFEF;
+            border: 2px solid black;
+            border-radius: 3px;
+            box-shadow: 3px;
+        """
+    )
+    
+    popup = GeoJsonPopup(
+        fields=["display_name"],
+        aliases=[""],
+        localize=True,
+    )
 
-    # 5. Add tooltips and click functionality
-    folium.GeoJson(
+    geojson_layer = GeoJson(
         merged_gdf,
-        style_function=lambda feature: {
-            'fillColor': colormap(feature['properties']['Value']) if pd.notna(feature['properties']['Value']) else '#808080',
-            'color': 'black',
-            'weight': 0.5,
-            'fillOpacity': 0.7
-        },
-        tooltip=folium.GeoJsonTooltip(
-            fields=["display_name", "Value"],
-            aliases=["County:", f"{index_type} Value:"],
-            localize=True,
-        ),
-        popup=folium.GeoJsonPopup(
-            fields=["display_name"],
-            aliases=[""],
-            localize=True,
-        )
-    ).add_to(m)
+        style_function=lambda feature: style_function(feature, colormap),
+        tooltip=tooltip,
+        popup=popup,
+        name="counties"
+    )
+    geojson_layer.add_to(m)
 
-    # 6. Display the map and capture output
-    map_output = st_folium(m, width='100%', height=500)
+    # 5. Display the map and capture user interaction
+    map_output = st_folium(m, width='100%', height=500, returned_objects=[])
     
     last_clicked_fips = None
-    if map_output and map_output.get('last_object_clicked_popup'):
-        # Extract FIPS code from the popup content (which is the display_name)
-        clicked_name = map_output['last_object_clicked_popup']
+    if map_output and map_output.get("last_object_clicked_popup"):
+        clicked_name = map_output["last_object_clicked_popup"]
         fips_series = merged_gdf[merged_gdf['display_name'] == clicked_name]['countyfips']
         if not fips_series.empty:
             last_clicked_fips = fips_series.iloc[0]
