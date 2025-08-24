@@ -156,28 +156,28 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
         except requests.exceptions.RequestException as e:
             st.error(f"Failed to download {index_type} data: {e}")
-            continue
+            return pd.DataFrame() # Return empty DataFrame on error
     
     if not all_data:
         st.warning("Could not load any climate data for the selected counties.")
         return pd.DataFrame()
 
-        combined_df = pd.concat(all_data, ignore_index=True)
-        
-        combined_df["date"] = pd.to_datetime(combined_df["date"], format="%Y-%m", errors='coerce')
-        combined_df.dropna(subset=["date", "Value"], inplace=True)
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    combined_df["date"] = pd.to_datetime(combined_df["date"], format="%Y-%m", errors='coerce')
+    combined_df.dropna(subset=["date", "Value"], inplace=True)
 
-        fips_df = get_county_options(return_df=True)
-        final_df = pd.merge(combined_df, fips_df, on="countyfips", how="left")
-        final_df.dropna(subset=["display_name"], inplace=True)
+    fips_df = get_county_options(return_df=True)
+    final_df = pd.merge(combined_df, fips_df, on="countyfips", how="left")
+    final_df.dropna(subset=["display_name"], inplace=True)
 
-        try:
-            validated_df = climate_data_schema.validate(final_df)
-            validated_df.to_parquet(cache_file_path)
-            return validated_df
-        except Exception as e:
-            st.error(f"Final data validation failed: {e}")
-            return pd.DataFrame()
+    try:
+        validated_df = climate_data_schema.validate(final_df)
+        validated_df.to_parquet(cache_file_path)
+        return validated_df
+    except Exception as e:
+        st.error(f"Final data validation failed: {e}")
+        return pd.DataFrame()
 
 
 @st.cache_data()
