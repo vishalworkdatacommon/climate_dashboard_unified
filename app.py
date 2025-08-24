@@ -72,14 +72,17 @@ def main() -> None:
         
         # --- Theme Selection ---
         theme_options = ["Light", "Dark"]
+        
+        # Get current theme from query params, default to "Light"
+        current_theme = st.query_params.get("theme", ["Light"])[0]
         try:
-            current_theme_index = theme_options.index(st.query_params.get("theme", "Light"))
+            current_theme_index = theme_options.index(current_theme)
         except ValueError:
-            current_theme_index = 0 # Default to Light
+            current_theme_index = 0  # Default to Light if theme is invalid
 
         def on_theme_change():
             new_theme = st.session_state.theme_selectbox
-            st.query_params.theme = new_theme
+            st.query_params["theme"] = new_theme
         
         st.selectbox(
             "Select Theme:",
