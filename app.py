@@ -6,23 +6,58 @@ from datetime import datetime
 import os
 import time
 
-# --- Page Configuration ---
-# Set theme based on query params BEFORE setting page config
-try:
-    theme = st.query_params.get("theme", ["Light"])[0]
-    if theme.lower() == "dark":
-        st.config.set_option("theme.base", "dark")
-    else:
-        st.config.set_option("theme.base", "light")
-except Exception:
-    st.config.set_option("theme.base", "light")
+# --- Theme Definitions ---
+# By defining theme content here, we avoid file I/O errors.
+LIGHT_THEME_CONFIG = """
+[theme]
+primaryColor="#0068c9"
+backgroundColor="#ffffff"
+secondaryBackgroundColor="#f5f5f5"
+textColor="#262730"
+font="sans serif"
+"""
 
+DARK_THEME_CONFIG = """
+[theme]
+primaryColor="#00a0dc"
+backgroundColor="#0e1117"
+secondaryBackgroundColor="#262730"
+textColor="#fafafa"
+font="sans serif"
+"""
+
+def apply_and_set_theme(theme_name: str):
+    """
+    Writes the selected theme to .streamlit/config.toml to apply it,
+    updates the URL query parameter, and stores it in session state.
+    This is the definitive method to ensure immediate theme changes.
+    """
+    theme_content = LIGHT_THEME_CONFIG if theme_name == "Light" else DARK_THEME_CONFIG
+    config_path = os.path.join(".streamlit", "config.toml")
+    try:
+        with open(config_path, "w") as f:
+            f.write(theme_content)
+        # Update the session state and query params to keep track of the current theme
+        st.session_state.theme = theme_name
+        st.query_params["theme"] = theme_name
+    except Exception as e:
+        st.error(f"Failed to apply theme: {e}")
+
+# --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
     page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# --- Initial Theme Application ---
+# Apply the theme from the URL query param on the very first run.
+if 'theme' not in st.session_state:
+    initial_theme = st.query_params.get("theme", ["Light"])[0]
+    apply_and_set_theme(initial_theme)
+    st.session_state.initial_theme_applied = True
+    st.rerun()
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_map_data
@@ -82,9 +117,8 @@ def main() -> None:
         
         # --- Theme Selection ---
         theme_options = ["Light", "Dark"]
-        current_theme = st.query_params.get("theme", ["Light"])[0]
         try:
-            current_theme_index = theme_options.index(current_theme)
+            current_theme_index = theme_options.index(st.session_state.get("theme", "Light"))
         except ValueError:
             current_theme_index = 0
 
@@ -95,8 +129,8 @@ def main() -> None:
             key="theme_selectbox",
         )
         
-        if selected_theme != current_theme:
-            st.query_params["theme"] = selected_theme
+        if selected_theme != st.session_state.get("theme"):
+            apply_and_set_theme(selected_theme)
             st.rerun()
         
         analysis_choice = None
