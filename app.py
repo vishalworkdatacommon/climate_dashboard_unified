@@ -6,6 +6,18 @@ from datetime import datetime
 import os
 import time
 
+# --- Theme Setup ---
+def set_theme():
+    """Sets the theme based on query parameters."""
+    try:
+        theme = st.query_params.get("theme", ["Light"])[0]
+        if theme.lower() == "dark":
+            st.config.set_option("theme.base", "dark")
+        else:
+            st.config.set_option("theme.base", "light")
+    except Exception:
+        st.config.set_option("theme.base", "light")
+
 # --- Page Configuration ---
 st.set_page_config(
     page_title="U.S. County-Level Drought Analysis",
@@ -13,6 +25,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+set_theme()
 
 # --- Custom Modules ---
 from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_map_data
