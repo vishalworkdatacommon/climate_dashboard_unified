@@ -34,8 +34,6 @@ from map_view import create_interactive_map
 # --- Session State Initialization ---
 if 'selected_fips' not in st.session_state:
     st.session_state.selected_fips = ['01001']  # Default to Autauga County, AL
-if 'last_clicked_fips' not in st.session_state:
-    st.session_state.last_clicked_fips = None
 
 # Suppress warnings for a cleaner app
 warnings.filterwarnings("ignore")
@@ -81,13 +79,7 @@ def main() -> None:
 
         index_choice = st.selectbox("1. Select Climate Index:", ["PDSI", "SPI", "SPEI"], key="index_selectbox")
 
-        # --- Definitive State Management for Map Clicks ---
-        # This logic now runs inside the sidebar, right before the multiselect is rendered.
-        if st.session_state.last_clicked_fips:
-            if st.session_state.last_clicked_fips not in st.session_state.selected_fips:
-                st.session_state.selected_fips.append(st.session_state.last_clicked_fips)
-            st.session_state.last_clicked_fips = None
-
+        # The multiselect now reads directly from the session state, which is updated by the map.
         fips_code_inputs = st.multiselect(
             "2. Search and Select Counties:",
             options=fips_options.index.tolist(),
@@ -127,8 +119,9 @@ def main() -> None:
         
         if not map_data.empty:
             clicked_fips = create_interactive_map(gdf, map_data, index_choice)
-            if clicked_fips and clicked_fips != st.session_state.last_clicked_fips:
-                st.session_state.last_clicked_fips = clicked_fips
+            # This is the simplified, direct logic.
+            if clicked_fips and clicked_fips not in st.session_state.selected_fips:
+                st.session_state.selected_fips.append(clicked_fips)
                 st.rerun()
 
     if not fips_code_inputs:
