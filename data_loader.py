@@ -44,7 +44,6 @@ def get_map_data(index_type: str) -> pd.DataFrame:
         latest_year = latest_entry[0]['year']
         latest_month = latest_entry[0]['month']
 
-        # FIX: Manually build and encode the URL to ensure quotes are preserved.
         where_clause = f"year='{latest_year}' AND month='{latest_month}'"
         encoded_where = urllib.parse.quote(where_clause)
         full_url = f"{base_url}?$limit=10000&$where={encoded_where}"
@@ -64,11 +63,15 @@ def get_map_data(index_type: str) -> pd.DataFrame:
 
         value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
         df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+        
+        # FIX: Convert 'Value' column to numeric, coercing errors to NaN
+        df["Value"] = pd.to_numeric(df["Value"], errors='coerce')
+        
         df["index_type"] = index_type
         
         fips_df = get_county_options(return_df=True)
         merged_df = pd.merge(df, fips_df, on="countyfips", how="left")
-        merged_df.dropna(subset=["display_name"], inplace=True)
+        merged_df.dropna(subset=["display_name", "Value"], inplace=True)
         
         return merged_df[["date", "countyfips", "Value", "index_type", "display_name"]]
 
@@ -144,6 +147,10 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
                 value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
                 df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+                
+                # FIX: Convert 'Value' column to numeric, coercing errors to NaN
+                df["Value"] = pd.to_numeric(df["Value"], errors='coerce')
+
                 df["index_type"] = index_type
                 all_data.append(df)
 
@@ -157,9 +164,8 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
 
         combined_df = pd.concat(all_data, ignore_index=True)
         
-        # FIX: Add robust date parsing to handle potential malformed date strings.
         combined_df["date"] = pd.to_datetime(combined_df["date"], format="%Y-%m", errors='coerce')
-        combined_df.dropna(subset=["date"], inplace=True)
+        combined_df.dropna(subset=["date", "Value"], inplace=True)
 
         fips_df = get_county_options(return_df=True)
         final_df = pd.merge(combined_df, fips_df, on="countyfips", how="left")
