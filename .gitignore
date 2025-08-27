@@ -131,7 +131,7 @@ cache/
 # Ignore generated data files
 climate_indices.parquet
 national_latest.parquet
-valid_counties.csv
+
 
 # Ignore screenshots
 *.png
