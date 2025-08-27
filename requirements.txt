@@ -161,6 +161,7 @@ plotly==6.3.0
     # via -r requirements.in
 pmdarima==2.0.4
     # via -r requirements.in
+    --no-binary pmdarima
 prophet==1.1.7
     # via -r requirements.in
 proto-plus==1.26.1
