@@ -103,6 +103,8 @@ markupsafe==3.0.2
     # via jinja2
 matplotlib==3.10.5
     # via prophet
+mypy-extensions==1.1.0
+    # via typing-inspect
 narwhals==2.2.0
     # via
     #   altair
@@ -132,6 +134,7 @@ packaging==25.0
     #   altair
     #   geopandas
     #   matplotlib
+    #   pandera
     #   plotly
     #   pmdarima
     #   pyogrio
@@ -146,6 +149,8 @@ pandas==2.3.2
     #   prophet
     #   statsmodels
     #   streamlit
+pandera==0.26.1
+    # via -r requirements.in
 patsy==1.0.1
     # via statsmodels
 pillow==11.3.0
@@ -180,7 +185,9 @@ pyasn1==0.6.1
 pyasn1-modules==0.4.2
     # via google-auth
 pydantic==2.11.7
-    # via google-generativeai
+    # via
+    #   google-generativeai
+    #   pandera
 pydantic-core==2.33.2
     # via pydantic
 pydeck==0.9.1
@@ -249,15 +256,22 @@ tqdm==4.67.1
     #   cmdstanpy
     #   google-generativeai
     #   prophet
+typeguard==4.4.4
+    # via pandera
 typing-extensions==4.15.0
     # via
     #   altair
     #   google-generativeai
+    #   pandera
     #   pydantic
     #   pydantic-core
     #   referencing
     #   streamlit
+    #   typeguard
+    #   typing-inspect
     #   typing-inspection
+typing-inspect==0.9.0
+    # via pandera
 typing-inspection==0.4.1
     # via pydantic
 tzdata==2025.2
