@@ -11,3 +11,4 @@ prophet
 requests
 pandera
 pmdarima
+lightgbm

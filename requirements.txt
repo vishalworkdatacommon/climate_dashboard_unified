@@ -61,6 +61,8 @@ jsonschema-specifications==2025.4.1
     # via jsonschema
 kiwisolver==1.4.9
     # via matplotlib
+lightgbm==4.6.0
+    # via -r requirements.in
 markupsafe==3.0.2
     # via jinja2
 matplotlib==3.10.5
@@ -76,6 +78,7 @@ numpy==1.26.4
     #   cmdstanpy
     #   contourpy
     #   geopandas
+    #   lightgbm
     #   matplotlib
     #   pandas
     #   patsy
@@ -164,6 +167,7 @@ scikit-learn==1.7.1
     #   pmdarima
 scipy==1.16.1
     # via
+    #   lightgbm
     #   pmdarima
     #   scikit-learn
     #   statsmodels
