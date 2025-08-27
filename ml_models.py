@@ -320,7 +320,6 @@ def plot_forecasting_comparison(
 import google.generativeai as genai
 import os
 
-@st.cache_data(show_spinner="Generating AI-powered summary...")
 def generate_ai_summary(
     county_name: str,
     index_type: str,
