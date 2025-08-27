@@ -1,7 +1,7 @@
 # build_national_view.py
 import pandas as pd
 import requests
-from io import StringIO
+import re
 from config import DATA_URLS, FIPS_PATH
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
@@ -19,7 +19,19 @@ def _fetch_index_data(index_type: str) -> tuple[str, pd.DataFrame | None]:
         response = requests.get(base_url + query, timeout=300) # 5 minute timeout for very large files
         if response.status_code == 200:
             print(f"  - Bulk download for {index_type} complete.")
-            return index_type, pd.read_csv(StringIO(response.text))
+            # Use regex to parse the JSON-like response
+            if index_type == 'SPEI':
+                # SPEI has a different format
+                data = re.findall(r'\{"state":"(.*?)","county":"(.*?)","fips":"(\d{5})","year":"(\d{4})","month":"(\d{1,2})","spei":"(.*?)"\}', response.text)
+                df = pd.DataFrame(data, columns=["state", "county", "fips", "year", "month", "spei"])
+            else:
+                # SPI and PDSI have the same format
+                value_col = {"SPI": "spi", "PDSI": "pdsi"}[index_type]
+                data = re.findall(r'\{"year":"(\d{4})","month":"(\d{1,2})","statefips":"(\d{1,2})","countyfips":"(\d{5})","'+value_col+'":"(.*?)"\}', response.text)
+                df = pd.DataFrame(data, columns=["year", "month", "statefips", "countyfips", value_col])
+
+            print(f"Columns for {index_type}: {df.columns.tolist()}")
+            return index_type, df
     except requests.RequestException as e:
         print(f"  - ERROR: Bulk download for {index_type} failed: {e}")
         return index_type, None
