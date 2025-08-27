@@ -391,4 +391,4 @@ def generate_ai_summary(
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"**Error:** Failed to generate AI summary. Details: {e}"led to generate AI summary. Details: {e}"
+        return f"**Error:** Failed to generate AI summary. Details: {e}"
