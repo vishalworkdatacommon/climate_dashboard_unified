@@ -129,6 +129,7 @@ numpy==1.26.4
     #   stanio
     #   statsmodels
     #   streamlit
+    --no-binary numpy
 packaging==25.0
     # via
     #   altair
