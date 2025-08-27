@@ -79,14 +79,25 @@ def get_live_data_for_counties(county_fips_list: list[str]) -> pd.DataFrame:
                 csv_data = StringIO(response.text)
                 df = pd.read_csv(csv_data)
 
+                # --- Data Validation and Transformation ---
+                if "year" not in df.columns or "month" not in df.columns:
+                    st.warning(f"Skipping {index_type} data due to missing 'year' or 'month' columns.")
+                    continue
+
+                value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
+                value_col = value_col_mapping[index_type]
+                if value_col not in df.columns:
+                    st.warning(f"Skipping {index_type} data due to missing '{value_col}' column.")
+                    continue
+
                 df["month"] = df["month"].map("{:02}".format)
                 df["date"] = df["year"].astype(str) + "-" + df["month"].astype(str)
+                
                 if "fips" in df.columns and "countyfips" not in df.columns:
                     df.rename(columns={"fips": "countyfips"}, inplace=True)
                 df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
 
-                value_col_mapping = {"SPEI": "spei", "SPI": "spi", "PDSI": "pdsi"}
-                df.rename(columns={value_col_mapping[index_type]: "Value"}, inplace=True)
+                df.rename(columns={value_col: "Value"}, inplace=True)
                 df["index_type"] = index_type
 
                 # Coerce 'Value' to numeric, turning any non-numeric placeholders (e.g., 'M') into NaN

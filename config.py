@@ -7,11 +7,11 @@ This file stores constants and settings to make the application more maintainabl
 
 from typing import Dict, Final
 
-# URLs for the climate data sources from data.cdc.gov (using JSON endpoints)
+# URLs for the climate data sources from data.cdc.gov (using CSV endpoints for stability)
 DATA_URLS: Final[Dict[str, str]] = {
-    "SPEI": "https://data.cdc.gov/resource/6nbv-ifib.json",
-    "SPI": "https://data.cdc.gov/resource/xbk2-5i4e.json",
-    "PDSI": "https://data.cdc.gov/resource/en5r-5ds4.json",
+    "SPEI": "https://data.cdc.gov/resource/6nbv-ifib.csv",
+    "SPI": "https://data.cdc.gov/resource/xbk2-5i4e.csv",
+    "PDSI": "https://data.cdc.gov/resource/en5r-5ds4.csv",
 }
 
 # File paths for local data assets
