@@ -72,6 +72,8 @@ jsonschema-specifications==2025.4.1
     # via jsonschema
 kiwisolver==1.4.9
     # via matplotlib
+lightgbm==4.5.0
+    # via -r requirements.in
 markupsafe==3.0.2
     # via jinja2
 matplotlib==3.10.5
@@ -243,3 +245,4 @@ xyzservices==2025.4.0
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
+google-generativeai
