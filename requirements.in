@@ -10,3 +10,4 @@ statsmodels
 prophet
 requests
 pandera
+pmdarima
