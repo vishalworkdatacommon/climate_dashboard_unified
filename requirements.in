@@ -4,7 +4,7 @@ numpy<2.0
 scikit-learn
 plotly
 lightgbm
-pmdarima
+pmdarima==2.0.3
 prophet
 google-generativeai
 geopandas

@@ -129,7 +129,6 @@ numpy==1.26.4
     #   stanio
     #   statsmodels
     #   streamlit
-    --no-binary numpy
 packaging==25.0
     # via
     #   altair
@@ -137,7 +136,6 @@ packaging==25.0
     #   matplotlib
     #   pandera
     #   plotly
-    #   pmdarima
     #   pyogrio
     #   statsmodels
     #   streamlit
@@ -160,9 +158,8 @@ pillow==11.3.0
     #   streamlit
 plotly==6.3.0
     # via -r requirements.in
-pmdarima==2.0.4
+pmdarima==2.0.3
     # via -r requirements.in
-    --no-binary pmdarima
 prophet==1.1.7
     # via -r requirements.in
 proto-plus==1.26.1
