@@ -338,3 +338,36 @@ def display_historical_insights(ts: pd.Series):
         value=f"{longest_drought} months",
         help=f"The longest consecutive period with an index value below {drought_threshold}."
     )
+
+
+def plot_national_map(latest_data: pd.DataFrame, gdf: pd.DataFrame, index_type: str, fips_options: pd.Series) -> go.Figure:
+    """
+    Generates a national choropleth map of the latest drought index values.
+    """
+    # Convert fips_options Series to a DataFrame for merging
+    county_names_df = fips_options.to_frame(name="display_name").reset_index()
+
+    merged_gdf = gdf.merge(latest_data, on="countyfips", how="left")
+    merged_gdf = merged_gdf.merge(county_names_df, on="countyfips", how="left")
+
+    fig = px.choropleth_mapbox(
+        merged_gdf,
+        geojson=merged_gdf.geometry,
+        locations=merged_gdf.index,
+        color="Value",
+        hover_name="display_name",
+        hover_data={"Value": ":.2f", "countyfips": True},
+        color_continuous_scale="RdYlBu",
+        range_color=[-4, 4],
+        mapbox_style="carto-positron",
+        zoom=3,
+        center={"lat": 37.0902, "lon": -95.7129},
+        opacity=0.6,
+        labels={"Value": f"Latest {index_type} Value"},
+    )
+
+    fig.update_layout(
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        title=f"National Overview of Latest {index_type} Data",
+    )
+    return fig

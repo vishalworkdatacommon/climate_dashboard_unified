@@ -1,13 +1,13 @@
 # schemas.py
 """Data validation schemas for the climate dashboard application."""
 
-import pandera as pa
+import pandera.pandas as pa
 
 # Using the older DataFrameSchema syntax for broader compatibility
 climate_data_schema = pa.DataFrameSchema({
     "date": pa.Column(pa.DateTime, nullable=False),
     "countyfips": pa.Column(str, nullable=False),
-    "Value": pa.Column(float, nullable=True),
+    "Value": pa.Column(pa.Float64, coerce=True, nullable=True),
     "index_type": pa.Column(str, pa.Check.isin(["SPEI", "SPI", "PDSI"])),
     "display_name": pa.Column(str, nullable=False),
 })

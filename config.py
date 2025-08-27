@@ -16,4 +16,8 @@ DATA_URLS: Final[Dict[str, str]] = {
 
 # File paths for local data assets
 GEOJSON_PATH: Final[str] = "counties.geojson"
-FIPS_PATH: Final[str] = "fips_to_county.csv"
+# The final, cleaned list of counties that have data for all indices
+FIPS_PATH = "valid_counties.csv"
+
+# The original, raw FIPS file used as input for the build script
+RAW_FIPS_PATH = "fips_to_county.csv"

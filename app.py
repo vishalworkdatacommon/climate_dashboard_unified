@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 
 # --- Custom Modules ---
-from data_loader import get_county_options, get_live_data_for_counties, get_geojson
+from data_loader import get_county_options, get_live_data_for_counties, get_geojson, get_latest_data_for_all_counties
 from plotting import (
     plot_trend_analysis,
     plot_anomaly_detection,
@@ -13,11 +13,14 @@ from plotting import (
     plot_autocorrelation,
     plot_comparison_mode,
     display_historical_insights,
+    plot_national_map,
 )
 from ml_models import (
     plot_forecasting_arima,
     plot_forecasting_prophet,
-    plot_forecasting_both,
+    plot_forecasting_lightgbm,
+    plot_forecasting_comparison,
+    generate_ai_summary,
 )
 
 # --- Page Configuration ---
@@ -34,7 +37,7 @@ warnings.filterwarnings("ignore")
 def main() -> None:
     st.title("U.S. County-Level Drought Analysis")
     st.markdown(
-        "Explore and compare key drought indices for any county in the United States. Data is fetched live from NOAA."
+        "Explore and compare key drought indices for any county in the United States. Data is fetched live from CDC."
     )
 
     with st.expander("About the Climate Indices"):
@@ -47,7 +50,6 @@ def main() -> None:
         )
 
     fips_options = get_county_options()
-    # gdf = get_geojson() # Reserved for future map implementation
 
     with st.sidebar:
         st.header("Dashboard Controls")
@@ -64,12 +66,15 @@ def main() -> None:
         )
 
         fips_code_inputs = st.multiselect(
-            "2. Search and Select Counties:",
+            "2. Analyze a County (or Several):",
             options=fips_options.index.tolist(),
             format_func=lambda x: fips_options.get(x, "Unknown County"),
             key="fips_multiselect",
             help="You can type to search for a county and select multiple counties for comparison.",
         )
+
+        if not fips_code_inputs:
+            st.success("Start Here! 👆")
 
         # Analysis selection is now in the main panel for single-county view
         analysis_choice = None
@@ -80,10 +85,22 @@ def main() -> None:
             )
 
     if not fips_code_inputs:
-        st.warning("Please select at least one county from the sidebar to begin.")
+        st.header("National Map View")
+        st.markdown("**Dive deeper: Search for a county in the sidebar to access detailed trends and forecasts.**")
+
+        latest_data = get_latest_data_for_all_counties(index_choice)
+        
+        if latest_data is not None:
+            gdf = get_geojson()
+            if gdf is not None:
+                fig = plot_national_map(latest_data, gdf, index_choice, fips_options)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Could not load geospatial data for the map.")
+        
         st.stop()
 
-    # --- Data Fetching ---
+    # --- Data Fetching for Selected Counties---
     full_data = get_live_data_for_counties(fips_code_inputs)
 
     if full_data.empty:
@@ -130,29 +147,99 @@ def main() -> None:
                 st.plotly_chart(fig, use_container_width=True)
             with tab5:
                 st.subheader("Forecasting Controls")
-                col1, col2, col3 = st.columns(3)
+                col1, col2 = st.columns(2)
                 with col1:
-                    model_choice = st.selectbox("Model:", ["ARIMA", "Prophet", "Both"], key="model_selectbox")
+                    model_selection = st.selectbox(
+                        "Model:", 
+                        [
+                            "ARIMA", "Prophet", "LightGBM", 
+                            "ARIMA vs. Prophet", "ARIMA vs. LightGBM", "Prophet vs. LightGBM",
+                            "All Models"
+                        ], 
+                        key="model_selection"
+                    )
                 with col2:
                     forecast_horizon = st.slider("Horizon (Months):", 6, 48, 24, 6, key="horizon_slider")
-                with col3:
-                    scenario = st.selectbox("Scenario:", ["Normal", "Wetter", "Drier"], key="scenario_selectbox", help="Simulate future conditions.")
 
-                if model_choice == "Prophet":
-                    fig = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario)
-                elif model_choice == "ARIMA":
-                    fig = plot_forecasting_arima(time_series, index_choice, forecast_horizon, scenario)
-                else:
-                    fig, metrics = plot_forecasting_both(time_series, index_choice, forecast_horizon, scenario)
-                
-                st.plotly_chart(fig, use_container_width=True)
-                if model_choice == "Both":
-                    st.subheader("Model Performance on Historical Data (Last 12 Months)")
-                    col1, col2 = st.columns(2)
+                # --- Scenario Analysis ---
+                scenario_params = {} # Default to no scenario
+                if st.toggle("Enable Scenario Analysis", key="scenario_toggle", help="Simulate future conditions by applying a shock or trend to the historical data before forecasting."):
+                    st.subheader("Scenario Analysis Controls")
+                    col1, col2, col3 = st.columns(3)
                     with col1:
-                        st.markdown("##### ARIMA"); st.metric("MAE", f"{metrics['arima_mae']:.4f}"); st.metric("RMSE", f"{metrics['arima_rmse']:.4f}"); st.metric("MAPE", f"{metrics['arima_mape']:.2%}")
+                        scenario_type = st.selectbox("Scenario Type:", ["Sudden Shock", "Gradual Trend"], key="scenario_type")
                     with col2:
-                        st.markdown("##### Prophet"); st.metric("MAE", f"{metrics['prophet_mae']:.4f}"); st.metric("RMSE", f"{metrics['prophet_rmse']:.4f}"); st.metric("MAPE", f"{metrics['prophet_mape']:.2%}")
+                        magnitude = st.slider("Magnitude of Change (%):", -50, 50, 10, 5, key="magnitude_slider")
+                    with col3:
+                        duration = st.slider("Duration of Change (Months):", 1, 12, 3, 1, key="duration_slider")
+
+                    scenario_params = {
+                        "type": scenario_type,
+                        "magnitude": magnitude / 100.0,
+                        "duration": duration
+                    }
+                
+                model_map = {
+                    "ARIMA": ["ARIMA"],
+                    "Prophet": ["Prophet"],
+                    "LightGBM": ["LightGBM"],
+                    "ARIMA vs. Prophet": ["ARIMA", "Prophet"],
+                    "ARIMA vs. LightGBM": ["ARIMA", "LightGBM"],
+                    "Prophet vs. LightGBM": ["Prophet", "LightGBM"],
+                    "All Models": ["ARIMA", "Prophet", "LightGBM"]
+                }
+                models_to_run = model_map[model_selection]
+
+                forecast_df = None
+                if len(models_to_run) == 1:
+                    model_choice = models_to_run[0]
+                    if model_choice == "Prophet":
+                        fig, forecast_df = plot_forecasting_prophet(time_series, index_choice, forecast_horizon, scenario_params)
+                    elif model_choice == "ARIMA":
+                        fig, forecast_df = plot_forecasting_arima(time_series, index_choice, forecast_horizon, scenario_params)
+                    elif model_choice == "LightGBM":
+                        fig, forecast_df = plot_forecasting_lightgbm(time_series, index_choice, forecast_horizon, scenario_params)
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # --- AI Summary for Single Model ---
+                    st.subheader("AI-Powered Summary")
+                    summary = generate_ai_summary(
+                        county_name=selected_county_names[0], index_type=index_choice,
+                        models_to_run=models_to_run, metrics={}, # No metrics for single model run
+                        forecast_horizon=forecast_horizon, time_series=time_series,
+                        forecast_df=forecast_df
+                    )
+                    st.markdown(summary)
+
+                else:
+                    fig, metrics, forecast_df = plot_forecasting_comparison(
+                        time_series, index_choice, models_to_run, forecast_horizon, scenario_params
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+
+                    # --- AI Summary ---
+                    st.subheader("AI-Powered Summary")
+                    summary = generate_ai_summary(
+                        county_name=selected_county_names[0],
+                        index_type=index_choice,
+                        models_to_run=models_to_run,
+                        metrics=metrics,
+                        forecast_horizon=forecast_horizon,
+                        time_series=time_series,
+                        forecast_df=forecast_df
+                    )
+                    st.markdown(summary)
+
+                    st.subheader("Model Performance (from Cross-Validation)")
+                    cols = st.columns(len(models_to_run))
+                    for i, model_name in enumerate(models_to_run):
+                        with cols[i]:
+                            st.markdown(f"##### {model_name}")
+                            st.metric("MAE", f"{metrics.get(f'{model_name.lower()}_mae', 0):.4f}")
+                            st.metric("RMSE", f"{metrics.get(f'{model_name.lower()}_rmse', 0):.4f}")
+                            st.metric("MAPE", f"{metrics.get(f'{model_name.lower()}_mape', 0):.2%}")
+                            st.metric("sMAPE", f"{metrics.get(f'{model_name.lower()}_smape', 0):.2%}")
 
     elif len(fips_code_inputs) > 1:
         # Multi-county view
@@ -198,7 +285,7 @@ def main() -> None:
     )
 
     st.markdown("---")
-    st.markdown("Data Source: [NOAA National Centers for Environmental Information (NCEI)](https://www.ncei.noa.gov/access/monitoring/nadm/indices)")
+    st.markdown("Data Source: [CDC Wonder](https://data.cdc.gov/resource)")
 
 if __name__ == "__main__":
     main()
