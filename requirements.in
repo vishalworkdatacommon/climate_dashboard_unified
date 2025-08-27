@@ -1,14 +1,9 @@
--i https://pypi.org/simple
---constraint packages.txt
-
 streamlit
 pandas
-geopandas
-plotly
+numpy
 scikit-learn
-statsmodels
-prophet
-requests
-pandera
-pmdarima
+plotly
 lightgbm
+pmdarima
+prophet
+google-generativeai
