@@ -1,7 +1,6 @@
 # build_valid_counties.py
 import pandas as pd
 import requests
-import re
 from config import DATA_URLS, RAW_FIPS_PATH
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -17,9 +16,12 @@ def get_counties_for_index(index_type: str) -> set:
     try:
         response = requests.get(base_url + query, timeout=180)
         if response.status_code == 200:
-            # Use regex to find all FIPS codes in the response text
-            fips_codes = re.findall(r'"(\d{5})"', response.text)
-            df = pd.DataFrame(fips_codes, columns=["countyfips"])
+            # Use the json library to parse the response
+            # Use the json library to parse the response
+            data = response.json()
+            df = pd.DataFrame(data)
+            # FIPS codes are in the column specified by fips_col
+            df.rename(columns={fips_col: "countyfips"}, inplace=True)
             df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
             print(f"  - Found {len(df)} unique counties for {index_type}.")
             return set(df["countyfips"])
