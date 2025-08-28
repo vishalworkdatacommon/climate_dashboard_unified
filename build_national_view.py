@@ -1,33 +1,39 @@
 # build_national_view.py
 import pandas as pd
 import requests
-import re
 from config import DATA_URLS, FIPS_PATH
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 from io import StringIO
 
 from io import StringIO
+import time
+
 def _fetch_index_data(index_type: str) -> tuple[str, pd.DataFrame | None]:
     """
-    Performs a single, bulk download of the entire dataset for one index type.
+    Performs a single, bulk download of the entire dataset for one index type with retries.
     Returns the index type along with the dataframe.
     """
     print(f"  - Starting bulk download for {index_type}...")
     base_url = DATA_URLS[index_type]
     query = "?$limit=50000000" 
     
-    try:
-        response = requests.get(base_url + query, timeout=300) # 5 minute timeout for very large files
-        if response.status_code == 200:
-            print(f"  - Bulk download for {index_type} complete.")
-            csv_data = StringIO(response.text)
-            df = pd.read_csv(csv_data)
-            print(f"Columns for {index_type}: {df.columns.tolist()}")
-            return index_type, df
-    except requests.RequestException as e:
-        print(f"  - ERROR: Bulk download for {index_type} failed: {e}")
-        return index_type, None
+    for attempt in range(3): # Try up to 3 times
+        try:
+            response = requests.get(base_url + query, timeout=300) # 5 minute timeout for very large files
+            if response.status_code == 200:
+                print(f"  - Bulk download for {index_type} complete.")
+                csv_data = StringIO(response.text)
+                df = pd.read_csv(csv_data)
+                print(f"Columns for {index_type}: {df.columns.tolist()}")
+                return index_type, df
+        except requests.RequestException as e:
+            print(f"  - ATTEMPT {attempt + 1} FAILED for {index_type}: {e}")
+            if attempt < 2: # Don't sleep on the last attempt
+                print("  - Retrying in 30 seconds...")
+                time.sleep(30)
+
+    print(f"  - ERROR: Bulk download for {index_type} failed after 3 attempts.")
     return index_type, None
 
 def main():
