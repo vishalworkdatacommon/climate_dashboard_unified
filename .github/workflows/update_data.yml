@@ -42,6 +42,7 @@ jobs:
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -f climate_indices.parquet
           # The following command checks if there are any staged changes before committing.
           # This prevents empty commits if the data hasn't changed.
           git diff --staged --quiet || git commit -m "Automated data refresh: Update climate_indices.parquet"
