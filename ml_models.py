@@ -332,8 +332,6 @@ def generate_ai_summary(
     Generates a narrative summary of the forecast results using a GenAI model.
     """
     # --- API Key Configuration ---
-    # Add debugging to see what secrets are available
-    st.write("Available secrets:", st.secrets.keys())
     
     if 'GOOGLE_API_KEY' not in st.secrets:
         return (
