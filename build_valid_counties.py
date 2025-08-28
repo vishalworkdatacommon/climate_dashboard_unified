@@ -1,11 +1,12 @@
 # build_valid_counties.py
 import pandas as pd
 import requests
+import time
 from config import DATA_URLS, RAW_FIPS_PATH
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 def get_counties_for_index(index_type: str) -> set:
-    """Fetches all unique county FIPS codes for a single index type."""
+    """Fetches all unique county FIPS codes for a single index type with retries."""
     print(f"Fetching county list for {index_type}...")
     base_url = DATA_URLS[index_type]
     fips_col = {"SPEI": "fips", "SPI": "countyfips", "PDSI": "countyfips"}[index_type]
@@ -13,21 +14,25 @@ def get_counties_for_index(index_type: str) -> set:
     # A SoQL query to get distinct FIPS codes
     query = f"?$select=DISTINCT {fips_col}"
     
-    try:
-        response = requests.get(base_url + query, timeout=180)
-        if response.status_code == 200:
-            # Use the json library to parse the response
-            # Use the json library to parse the response
-            data = response.json()
-            df = pd.DataFrame(data)
-            # FIPS codes are in the column specified by fips_col
-            df.rename(columns={fips_col: "countyfips"}, inplace=True)
-            df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
-            print(f"  - Found {len(df)} unique counties for {index_type}.")
-            return set(df["countyfips"])
-    except requests.RequestException as e:
-        print(f"  - ERROR: Could not fetch county list for {index_type}: {e}")
-        return set()
+    for attempt in range(3): # Try up to 3 times
+        try:
+            response = requests.get(base_url + query, timeout=180)
+            if response.status_code == 200:
+                # Use the json library to parse the response
+                data = response.json()
+                df = pd.DataFrame(data)
+                # FIPS codes are in the column specified by fips_col
+                df.rename(columns={fips_col: "countyfips"}, inplace=True)
+                df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
+                print(f"  - Found {len(df)} unique counties for {index_type}.")
+                return set(df["countyfips"])
+        except requests.RequestException as e:
+            print(f"  - ATTEMPT {attempt + 1} FAILED for {index_type}: {e}")
+            if attempt < 2: # Don't sleep on the last attempt
+                print("  - Retrying in 30 seconds...")
+                time.sleep(30)
+
+    print(f"  - ERROR: Could not fetch county list for {index_type} after 3 attempts.")
     return set()
 
 def main():
