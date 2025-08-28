@@ -1,4 +1,4 @@
-name: Update National Climate Data
+name: Update National Data Manually
 
 on:
   workflow_dispatch:
