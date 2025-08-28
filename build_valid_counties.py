@@ -5,6 +5,8 @@ import time
 from config import DATA_URLS, RAW_FIPS_PATH
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import io
+
 def get_counties_for_index(index_type: str) -> set:
     """Fetches all unique county FIPS codes for a single index type with retries."""
     print(f"Fetching county list for {index_type}...")
@@ -18,15 +20,15 @@ def get_counties_for_index(index_type: str) -> set:
         try:
             response = requests.get(base_url + query, timeout=180)
             if response.status_code == 200:
-                # Use the json library to parse the response
-                data = response.json()
-                df = pd.DataFrame(data)
+                # The response is a CSV, so we read it into a pandas DataFrame
+                csv_data = io.StringIO(response.text)
+                df = pd.read_csv(csv_data)
                 # FIPS codes are in the column specified by fips_col
                 df.rename(columns={fips_col: "countyfips"}, inplace=True)
                 df["countyfips"] = df["countyfips"].astype(str).str.zfill(5)
                 print(f"  - Found {len(df)} unique counties for {index_type}.")
                 return set(df["countyfips"])
-        except requests.RequestException as e:
+        except (requests.RequestException, pd.errors.ParserError) as e:
             print(f"  - ATTEMPT {attempt + 1} FAILED for {index_type}: {e}")
             if attempt < 2: # Don't sleep on the last attempt
                 print("  - Retrying in 30 seconds...")
