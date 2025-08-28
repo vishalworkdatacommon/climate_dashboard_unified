@@ -318,7 +318,6 @@ def plot_forecasting_comparison(
     return fig, metrics, final_forecast_df
 
 import google.generativeai as genai
-import os
 
 def generate_ai_summary(
     county_name: str,
@@ -333,12 +332,12 @@ def generate_ai_summary(
     Generates a narrative summary of the forecast results using a GenAI model.
     """
     # --- API Key Configuration ---
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
+    if 'GOOGLE_API_KEY' not in st.secrets:
         return (
-            "**Warning:** `GOOGLE_API_KEY` environment variable not set. "
-            "AI summary generation is disabled. Please set the key to enable this feature."
+            "**Warning:** `GOOGLE_API_KEY` not found in Hugging Face secrets. "
+            "AI summary generation is disabled. Please add the key to your Space's settings."
         )
+    api_key = st.secrets["GOOGLE_API_KEY"]
     
     try:
         genai.configure(api_key=api_key)
