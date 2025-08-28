@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit.errors import StreamlitAPIException, StreamlitSecretNotFoundError
 import pandas as pd
 import plotly.graph_objects as go
 import pmdarima as pm
@@ -332,19 +333,25 @@ def generate_ai_summary(
     Generates a narrative summary of the forecast results using a GenAI model.
     """
     # --- API Key Configuration ---
-    
-    if 'GOOGLE_API_KEY' not in st.secrets:
-        return (
-            "**Warning:** `GOOGLE_API_KEY` not found in Hugging Face secrets. "
-            "AI summary generation is disabled. Please add the key to your Space's settings."
-        )
-    api_key = st.secrets["GOOGLE_API_KEY"]
-    
     try:
+        if 'GOOGLE_API_KEY' not in st.secrets:
+            return (
+                "**Info:** `GOOGLE_API_KEY` not found in Streamlit secrets. "
+                "AI summary generation is disabled. To enable it locally, create a `.streamlit/secrets.toml` file "
+                "with your Google API key."
+            )
+        api_key = st.secrets["GOOGLE_API_KEY"]
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash-latest')
+
+    except StreamlitSecretNotFoundError:
+        return (
+            "**Info:** AI summary feature is not configured for local development. "
+            "To enable it, create a `.streamlit/secrets.toml` file and add your `GOOGLE_API_KEY`."
+        )
     except Exception as e:
         return f"**Error:** Could not configure the Generative AI model. Please check your API key. Details: {e}"
+
 
     # --- Prompt Engineering ---
     # Create a concise summary of the input data for the prompt
@@ -391,3 +398,85 @@ def generate_ai_summary(
         return response.text
     except Exception as e:
         return f"**Error:** Failed to generate AI summary. Details: {e}"
+
+def handle_forecasting_tab(time_series, index_choice, county_name):
+    """
+    Handles the UI and logic for the forecasting tab in the Streamlit app.
+    """
+    st.subheader("Forecasting Controls")
+    col1, col2 = st.columns(2)
+    with col1:
+        model_selection = st.selectbox(
+            "Model:",
+            [
+                "ARIMA", "Prophet", "LightGBM",
+                "ARIMA vs. Prophet", "ARIMA vs. LightGBM", "Prophet vs. LightGBM",
+                "All Models"
+            ],
+            key="model_selection"
+        )
+    with col2:
+        forecast_horizon = st.slider("Horizon (Months):", 6, 48, 24, 6, key="horizon_slider")
+
+    scenario_params = {}
+    if st.toggle("Enable Scenario Analysis", key="scenario_toggle", help="Simulate future conditions by applying a shock or trend to the historical data before forecasting."):
+        st.subheader("Scenario Analysis Controls")
+        sc_col1, sc_col2, sc_col3 = st.columns(3)
+        with sc_col1:
+            scenario_type = st.selectbox("Scenario Type:", ["Sudden Shock", "Gradual Trend"], key="scenario_type")
+        with sc_col2:
+            magnitude = st.slider("Magnitude of Change (%):", -50, 50, 10, 5, key="magnitude_slider")
+        with sc_col3:
+            duration = st.slider("Duration of Change (Months):", 1, 12, 3, 1, key="duration_slider")
+        scenario_params = {"type": scenario_type, "magnitude": magnitude / 100.0, "duration": duration}
+
+    model_map = {
+        "ARIMA": ["ARIMA"], "Prophet": ["Prophet"], "LightGBM": ["LightGBM"],
+        "ARIMA vs. Prophet": ["ARIMA", "Prophet"], "ARIMA vs. LightGBM": ["ARIMA", "LightGBM"],
+        "Prophet vs. LightGBM": ["Prophet", "LightGBM"], "All Models": ["ARIMA", "Prophet", "LightGBM"]
+    }
+    models_to_run = model_map[model_selection]
+
+    forecast_df = None
+    if len(models_to_run) == 1:
+        model_choice = models_to_run[0]
+        plot_func_map = {
+            "ARIMA": plot_forecasting_arima,
+            "Prophet": plot_forecasting_prophet,
+            "LightGBM": plot_forecasting_lightgbm
+        }
+        fig, forecast_df = plot_func_map[model_choice](time_series, index_choice, forecast_horizon, scenario_params)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        st.subheader("AI-Powered Summary")
+        summary = generate_ai_summary(
+            county_name=county_name, index_type=index_choice,
+            models_to_run=models_to_run, metrics={},
+            forecast_horizon=forecast_horizon, time_series=time_series,
+            forecast_df=forecast_df
+        )
+        st.markdown(summary)
+    else:
+        fig, metrics, forecast_df = plot_forecasting_comparison(
+            time_series, index_choice, models_to_run, forecast_horizon, scenario_params
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("AI-Powered Summary")
+        summary = generate_ai_summary(
+            county_name=county_name, index_type=index_choice,
+            models_to_run=models_to_run, metrics=metrics,
+            forecast_horizon=forecast_horizon, time_series=time_series,
+            forecast_df=forecast_df
+        )
+        st.markdown(summary)
+
+        st.subheader("Model Performance (from Cross-Validation)")
+        cols = st.columns(len(models_to_run))
+        for i, model_name in enumerate(models_to_run):
+            with cols[i]:
+                st.markdown(f"##### {model_name}")
+                st.metric("MAE", f"{metrics.get(f'{model_name.lower()}_mae', 0):.4f}")
+                st.metric("RMSE", f"{metrics.get(f'{model_name.lower()}_rmse', 0):.4f}")
+                st.metric("MAPE", f"{metrics.get(f'{model_name.lower()}_mape', 0):.2%}")
+                st.metric("sMAPE", f"{metrics.get(f'{model_name.lower()}_smape', 0):.2%}")

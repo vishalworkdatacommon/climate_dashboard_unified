@@ -9,6 +9,10 @@ import time
 from config import DATA_URLS, GEOJSON_PATH, FIPS_PATH
 from schemas import climate_data_schema
 
+# --- Constants ---
+CACHE_DIR = "cache"
+
+
 
 
 
